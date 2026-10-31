@@ -1,0 +1,10 @@
+/* Status icons (ui/statusIcons.ts): buffs and ailments in the right-edge column under the minimap, after the weight / status-point icons. */
+.sicon.sc { order: 3; background: linear-gradient(var(--c1), var(--c2)); cursor: help; }
+.sicon.sc svg { display: block; width: 20px; height: 20px; margin: 1px; overflow: visible; }
+.sicon.sc.bad { border-color: #ffd0c8; box-shadow: 0 0 0 1px rgba(120, 0, 0, 0.75), inset 0 0 0 1px rgba(120, 0, 0, 0.3); }
+.sicon.sc:hover { filter: brightness(1.12) saturate(1.1); }
+.sicon.sc.low { animation: scBlink 0.7s steps(2, jump-none) infinite; }
+@keyframes scBlink { 50% { opacity: 0.35; } }
+#sc-tip { position: fixed; z-index: 40; transform: translate(-100%, -50%); padding: 2px 6px; border: 1px solid #f4f1f6; border-radius: 1px; pointer-events: none;
+  background: rgba(20, 20, 28, 0.92); color: #fff; font: 12px/15px var(--win-font); white-space: nowrap; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
+#sc-tip[hidden] { display: none; }

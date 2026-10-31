@@ -1,0 +1,15 @@
+/* Combat overlays owned by the combat-feedback code (ui/damage.ts, main.ts); the HUD skin stays in style.css.
+   Damage numbers are canvases styled inline by damage.ts.
+
+   Monster life gauge, right under the monster's drawn feet. It uses the classic client's monster colours: a magenta
+   fill on a grey track inside a thin navy frame, yellow below 25% (roBrowser Renderer/Entity/EntityLife.js, behaviour
+   only). That is a different colour family from the player's green gauge and name, so a monster's bar standing next
+   to your feet never reads as yours. */
+.mob-life { position: absolute; transform: translate(-50%, 0); width: 48px; height: 3px; padding: 1px; box-sizing: content-box;
+  background: #424242; border: 1px solid #10189c; pointer-events: none; transition: opacity 0.2s; }
+.mob-life i { display: block; height: 3px; background: linear-gradient(#ff7cf2, #ff00e7 45%, #d600c2); transform-origin: left; }
+.mob-life.low i { background: linear-gradient(#ffff9a, #ffff00 45%, #d8d800); }
+
+/* C07: a boss / MVP keeps the monster gauge but a little wider, with a gold / magenta frame */
+.mob-life.boss { width: 64px; box-shadow: 0 0 0 1px #ffcf5a; }
+.mob-life.mvp { width: 80px; box-shadow: 0 0 0 1px #ff8cf0, 0 0 6px #ff00e7; }

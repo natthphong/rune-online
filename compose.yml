@@ -1,0 +1,25 @@
+# One-command self-host:  docker compose up --build   ->  http://localhost:2567
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: rune, POSTGRES_PASSWORD: rune, POSTGRES_DB: rune }
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U rune"], interval: 5s, retries: 10 }
+  redis:
+    image: redis:7-alpine
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, retries: 10 }
+  game:
+    build: .
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    ports: ["2567:2567"]
+    environment:
+      GAME_NAME: ro
+      DATABASE_URL: postgres://rune:rune@postgres:5432/rune
+      REDIS_URL: redis://redis:6379
+      DB_SCHEMA: ro
+      REDIS_PREFIX: "ro:"
+      MAP_SEED: "1337"
+volumes:
+  pgdata:

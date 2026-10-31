@@ -1,0 +1,46 @@
+/* ---------- Skill Tree window (ui/skills.ts) ----------
+   The window's own skin: a pale parchment grid of icon tiles (icon, "lv / max", name, a gold + while a point can go in), a tab
+   per tree over it and "Skill Points: N" in the footer. Our own CSS. */
+#w-skill { top: 96px; left: 240px; width: 360px; }
+.sk-tabs { display: flex; gap: 2px; padding: 4px 6px 0; background: linear-gradient(#eef2fa, #e3e9f5); border-bottom: 1px solid #b9c3d9; }
+.sk-tabs button { padding: 2px 12px; border: 1px solid #b9c3d9; border-bottom: 0; border-radius: 4px 4px 0 0; background: linear-gradient(#f4f6fb, #dde3f0);
+  color: #5a6480; font: bold 11px/14px var(--win-font); }
+.sk-tabs button.on { background: #fbf7ec; color: #8a5a12; position: relative; top: 1px; }
+.sk-body { padding: 8px; background: linear-gradient(#fbf7ec, #f2ead6); max-height: 300px; overflow-y: auto; }
+.sk-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 6px; }
+.sk-tile { position: relative; display: grid; justify-items: center; gap: 1px; padding: 5px 2px 4px; border: 1px solid #e0d3b0; border-radius: 5px;
+  background: rgba(255, 255, 255, 0.55); }
+.sk-tile[draggable="true"] { cursor: grab; }
+.sk-tile:hover { border-color: #c79b3b; background: rgba(255, 249, 230, 0.95); }
+.sk-tile.locked { opacity: 0.45; filter: grayscale(0.8); }
+.sk-tile .skicon { border-radius: 7px; }
+.sk-lv { font: bold 10px/12px var(--win-font); color: #6b5426; }
+.sk-name { max-width: 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 10px/12px var(--win-font); color: #4a4234; }
+.sk-up { position: absolute; top: 2px; right: 4px; width: 15px; height: 15px; padding: 0; border: 1px solid #a8761d; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffe9a8, #e2a43a); color: #5a3606; font: bold 12px/12px var(--win-font); }
+.sk-up:hover { filter: brightness(1.12); }
+.sk-foot { justify-content: space-between; align-items: center; }
+.sk-hint { color: #8a8f9e; font-size: 10px; }
+#sk-points { font-weight: bold; color: #8a5a12; }
+.icon.skicon { position: relative; background-repeat: no-repeat; }
+.icon.skicon b { position: absolute; right: -2px; bottom: -3px; padding: 0 2px; border-radius: 3px; background: rgba(30, 30, 50, 0.75); color: #fff;
+  font: bold 8px/10px var(--win-font); }
+/* cooldown / after-cast delay on a shortcut slot holding the skill: a dark sweep that empties as the time runs out */
+.slotcell.cooling::after { content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none; border-radius: 1px;
+  background: conic-gradient(rgba(10, 14, 30, 0.6) var(--cd, 0deg), transparent 0); }
+/* targeting a skill: the aim cursor (crosshair) until a unit / cell is clicked, Esc or a right-click cancels */
+body.skill-cursor, body.skill-cursor #view { cursor: crosshair; }
+
+/* ---------- over units: the cast bar and the shouted skill name (skillFx.ts) ---------- */
+.castbar { position: absolute; transform: translate(-50%, -100%); width: 54px; height: 6px; padding: 1px; border: 1px solid #10131c; border-radius: 2px;
+  background: rgba(16, 19, 28, 0.85); pointer-events: none; }
+.castbar i { display: block; height: 100%; background: linear-gradient(#bff0ff, #3fa8e6); transform-origin: left; transform: scaleX(0); }
+.skill-shout { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; pointer-events: none; color: #fff36a;
+  font: bold 12px/14px var(--win-font); text-shadow: -1px 0 #3a2a00, 1px 0 #3a2a00, 0 -1px #3a2a00, 0 1px #3a2a00, 0 2px 3px rgba(0, 0, 0, 0.6); }
+#menu-icons .mico[data-win="w-skill"] { position: relative; }
+#menu-icons .mico[data-badge]::after { content: attr(data-badge); position: absolute; right: -3px; bottom: -3px; min-width: 11px; padding: 0 2px;
+  border-radius: 6px; background: linear-gradient(#ff9585, #db3a2f); color: #fff; font: bold 8px/11px var(--win-font); text-align: center; }
+
+/* skills that do nothing yet: greyed with a "coming later" tag and no + button */
+.sk-tile.later { opacity: .45; filter: grayscale(1); }
+.sk-tile.later::after { content: attr(data-later); position: absolute; left: 0; right: 0; bottom: 0; font-size: 9px; text-align: center; color: #ddd; background: rgba(0,0,0,.55); }

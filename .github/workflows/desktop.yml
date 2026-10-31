@@ -1,0 +1,123 @@
+# Desktop builds (Electron, see desktop/README.md).
+# - windows-smoke (every tag + manual): the only real Windows check. Stages the app, runs the bundled server with plain `node`
+#   in simple mode (RO_STORE=pglite: embedded Postgres + in-memory Redis), plays the smoke and quest bots against it, then
+#   restarts the server on the same data folder and logs in again.
+# - mac / windows (tags only, after windows-smoke): unsigned .dmg (arm64 + x64) and .exe (NSIS installer + portable),
+#   attached to the GitHub Release of the tag. The version comes from package.json (desktop/build.mjs copies it).
+name: desktop
+
+on:
+  push:
+    tags: ["v*", "2.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  windows-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install (game + desktop)
+        run: |
+          pnpm install --frozen-lockfile
+          cd desktop && pnpm install --frozen-lockfile
+      - name: Stage (client build + server bundle)
+        run: node desktop/build.mjs
+      - name: Start the bundled server (pglite)
+        run: |
+          mkdir -p "$RUNNER_TEMP/rl"
+          echo "PGLITE_DIR=$RUNNER_TEMP/rl/pgdata" >> "$GITHUB_ENV"
+          RO_STORE=pglite GAME_NAME=ro PORT=2680 HOST=127.0.0.1 REGISTER_PER_HOUR=100 PGLITE_DIR="$RUNNER_TEMP/rl/pgdata" \
+            PUBLIC_DIR="$PWD/desktop/stage/game/public" node desktop/stage/game/server/src/index.mjs > "$RUNNER_TEMP/rl/server.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/rl/server.pid"
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:2680/health && exit 0; sleep 1; done
+          cat "$RUNNER_TEMP/rl/server.log"; exit 1
+      - name: Page is served
+        run: curl -sf http://127.0.0.1:2680/ | grep -q "<title>"
+      - name: smoke bot
+        run: pnpm --filter client smoke http://127.0.0.1:2680
+      - name: quest bot
+        run: pnpm --filter client quest http://127.0.0.1:2680
+      - name: Restart keeps accounts
+        run: |
+          kill "$(cat "$RUNNER_TEMP/rl/server.pid")" || true
+          sleep 3
+          RO_STORE=pglite GAME_NAME=ro PORT=2680 HOST=127.0.0.1 PGLITE_DIR="$PGLITE_DIR" \
+            node desktop/stage/game/server/src/index.mjs >> "$RUNNER_TEMP/rl/server.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/rl/server.pid"
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:2680/health && break; sleep 1; done
+          # the smoke bot's fixed test account (test-only password, see client/scripts/bot.ts) must still log in
+          curl -sf -X POST http://127.0.0.1:2680/api/login -H "content-type: application/json" \
+            -d '{"username":"smoke_bot_a","password":"bot-test-password"}' | grep -q token
+          echo "OK: account kept across a restart"
+      - name: Server log
+        if: always()
+        run: |
+          kill "$(cat "$RUNNER_TEMP/rl/server.pid" 2>/dev/null)" 2>/dev/null || true
+          cat "$RUNNER_TEMP/rl/server.log" || true
+
+  mac:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: windows-smoke
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: pnpm install --frozen-lockfile
+      - run: cd desktop && pnpm install --frozen-lockfile
+      - run: node desktop/build.mjs
+      - name: electron-builder (.dmg arm64 + x64, ad-hoc signed)
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: pnpm exec electron-builder --mac dmg --arm64 --x64 --publish never
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: desktop/dist/*.dmg
+
+  windows:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: windows-smoke
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - run: pnpm install --frozen-lockfile
+      - run: cd desktop && pnpm install --frozen-lockfile
+      - run: node desktop/build.mjs
+      - name: electron-builder (.exe NSIS + portable, unsigned)
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: pnpm exec electron-builder --win nsis portable --x64 --publish never
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: desktop/dist/*.exe

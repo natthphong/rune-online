@@ -1,0 +1,42 @@
+{
+  "name": "runebound-legacy",
+  "productName": "Runebound Legacy",
+  "version": "2.6.0",
+  "description": "Runebound Legacy desktop build: the game server + client in one app",
+  "private": true,
+  "type": "module",
+  "main": "main.mjs",
+  "author": "Runebound Legacy",
+  "license": "UNLICENSED",
+  "scripts": {
+    "stage": "node build.mjs",
+    "start": "electron .",
+    "dist:mac": "node build.mjs && electron-builder --mac dmg --arm64",
+    "dist:mac-x64": "node build.mjs && electron-builder --mac dmg --x64",
+    "dist:win": "node build.mjs && electron-builder --win nsis portable --x64"
+  },
+  "devDependencies": {
+    "electron": "42.10.0",
+    "electron-builder": "26.17.0",
+    "esbuild": "0.25.12"
+  },
+  "build": {
+    "appId": "dev.runebound.legacy",
+    "productName": "Runebound Legacy",
+    "artifactName": "RuneboundLegacy-${version}-${os}-${arch}.${ext}",
+    "directories": { "output": "dist" },
+    "files": ["main.mjs", "package.json"],
+    "extraResources": [{ "from": "stage/game", "to": "game" }],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.role-playing-games",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "target": ["dmg"]
+    },
+    "dmg": { "writeUpdateInfo": false },
+    "win": { "target": ["nsis", "portable"], "signAndEditExecutable": false },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "differentialPackage": false },
+    "portable": { "artifactName": "RuneboundLegacy-${version}-portable.${ext}" }
+  }
+}

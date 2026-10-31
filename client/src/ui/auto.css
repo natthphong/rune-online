@@ -1,0 +1,17 @@
+/* Auto-play (C12): toggle above the quest tracker and the AUTO indicator at the top centre. */
+#auto-btn { position: fixed; top: 136px; right: 42px; z-index: 7; display: flex; align-items: center; gap: 3px; height: 18px; padding: 0 8px 0 5px;
+  border: 1px solid rgba(255, 255, 255, 0.28); border-radius: 2px; background: rgba(10, 12, 20, 0.72); color: #d8dce6;
+  font: bold 11px/16px Arial, Helvetica, var(--ui-font); text-shadow: 1px 1px 0 #000; cursor: pointer; }
+#auto-btn svg { width: 10px; height: 10px; fill: currentColor; }
+#auto-btn:hover { color: #fff; border-color: rgba(255, 255, 255, 0.5); }
+#auto-btn.on { color: #1a1200; background: linear-gradient(#ffe27a, #e8b52c); border-color: #7a5200; text-shadow: none; }
+#auto-btn[hidden] { display: none; }
+#auto-badge { position: fixed; left: 50%; top: 58px; z-index: 6; transform: translateX(-50%); display: flex; align-items: center; gap: 8px;
+  max-width: 60vw; padding: 3px 14px 4px 4px; border: 1px solid rgba(255, 214, 90, 0.55); border-radius: 2px; background: rgba(10, 12, 20, 0.78);
+  color: #fff; font: 12px/16px Arial, Helvetica, var(--ui-font); text-shadow: 1px 1px 0 #000; pointer-events: none; }
+#auto-badge b { padding: 0 6px; border-radius: 2px; background: #e8b52c; color: #1a1200; font-size: 11px; letter-spacing: 0.08em; text-shadow: none;
+  animation: auto-pulse 1.6s ease-in-out infinite; }
+#auto-badge span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#auto-badge[hidden] { display: none; }
+@keyframes auto-pulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { #auto-badge b { animation: none; } }

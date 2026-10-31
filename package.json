@@ -1,0 +1,13 @@
+{
+  "name": "ro",
+  "private": true,
+  "version": "2.6.0",
+  "type": "module",
+  "packageManager": "pnpm@12.14.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm --filter client build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "node --test shared/rules/*.test.ts server/src/*.test.ts"
+  }
+}

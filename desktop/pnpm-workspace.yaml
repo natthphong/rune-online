@@ -1,0 +1,7 @@
+# Standalone workspace (not part of ../pnpm-workspace.yaml, so the server Docker image never sees Electron).
+packages: []
+allowBuilds:
+  electron: true
+  esbuild: true
+  electron-winstaller: false
+  dmg-license: false

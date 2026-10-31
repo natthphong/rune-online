@@ -1,0 +1,64 @@
+/* NPC dialog in the classic layout (our own skin; geometry after the original's NPC box / menu window): a white box with a
+   hairline inner frame and a pale text panel, Next / Close at the bottom right; the menu window under it with a highlighted
+   row and OK / Cancel; the NPC illustration (cutin) at a screen edge, with a name plate. */
+#w-npc, #w-npcmenu { width: 304px; min-width: 0; cursor: default; }
+#w-npc .npc-frame, #w-npcmenu .npc-frame { margin: 3px; }
+#w-npc { z-index: 40; }
+#w-npcmenu { z-index: 41; }
+.npc-frame { padding: 5px 5px 4px; border: 1px solid #c1c6c2; border-radius: 5px; }
+.npc-text { height: 136px; overflow-y: scroll; padding: 4px 7px; background: #eff4f0; color: #111; font: 12px/18px Arial, Helvetica, var(--ui-font);
+  white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.npc-text .ln-name { color: #1b2e6b; font-weight: bold; }
+.npc-text .navi-link { color: #c00000; text-decoration: underline; cursor: pointer; }
+.npc-text .navi-link:hover { color: #ff2020; }
+.npc-text .navi-link.armed { color: #0a7b2d; }
+.npc-text .navi-link.armed::after { content: " \00bb"; text-decoration: none; display: inline-block; }
+.npc-text .item-link { color: #0070c0; }
+.npc-btns { display: flex; justify-content: flex-end; gap: 4px; height: 21px; margin-top: 4px; }
+.npc-btns .btn { min-width: 48px; height: 20px; padding: 0 8px; font: bold 11px/18px Arial, Helvetica, var(--ui-font); }
+.npc-btns .btn[hidden] { display: none; }
+.npc-btns .hint { min-width: 0; margin-right: auto; align-self: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #8b93a6; font-size: 10px; }
+.npc-btns .hint.go { color: #0a7b2d; font-weight: bold; }
+.npc-options { max-height: 124px; margin: 0; padding: 2px 0; overflow-y: scroll; list-style: none;
+  font: 12px/20px Arial, Helvetica, var(--ui-font); }
+.npc-options li { height: 21px; padding: 0 8px; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.npc-options li:hover { background: #e4edff; }
+.npc-options li.on { background: #cde0ff; }
+.npc-options li b { display: inline-block; width: 16px; color: #8b93a6; font-weight: normal; }
+/* a page longer than the box opens at its top and says so: the scrollbar is our own (dialog.ts withScrollbar), always drawn while
+   there is something to scroll (native bars are overlays on macOS and hidden in headless capture): ▲, a track with a lavender
+   slider like the window chrome, ▼ */
+:root {
+  --npc-up: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='5'%3E%3Cpath d='M0 5 3.5 0 7 5z' fill='%235b6d9d'/%3E%3C/svg%3E");
+  --npc-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='5'%3E%3Cpath d='M0 0h7L3.5 5z' fill='%235b6d9d'/%3E%3C/svg%3E");
+}
+.npc-view { display: flex; min-height: 0; }
+.npc-view > .npc-text, .npc-view > .npc-options { flex: 1; min-width: 0; scrollbar-width: none; }
+.npc-view > .npc-text::-webkit-scrollbar, .npc-view > .npc-options::-webkit-scrollbar { display: none; }
+.npc-view.opts { background: #f9f9f9; border: 1px solid #e1e4ea; }
+.npc-view.opts > .npc-options { border: 0; }
+.npc-bar { display: flex; flex: none; flex-direction: column; width: 12px; border-left: 1px solid #c3cbdb; background: #e1e6f0; }
+.npc-bar[hidden] { display: none; }
+.npc-bar button { flex: none; height: 12px; padding: 0; border: 0; background: var(--npc-up) center / 7px 5px no-repeat; }
+.npc-bar button:last-child { background-image: var(--npc-down); }
+.npc-bar button:hover { background-color: #d2daea; }
+.npc-bar .track { position: relative; flex: 1; min-height: 0; }
+.npc-bar .track i { position: absolute; top: 0; left: 1px; right: 1px; height: 100%; border: 1px solid #7f90bd; border-radius: 3px; background: linear-gradient(90deg, #d3def5, #adbfe4); }
+.npc-bar .track i:hover { background: linear-gradient(90deg, #e0e9fb, #98acd9); }
+@keyframes npcIn { from { opacity: 0; transform: translateY(4px); } }
+#w-npc:not([hidden]), #w-npcmenu:not([hidden]) { animation: npcIn 0.14s ease-out; }
+
+/* cutin: ZC_SHOW_IMAGE positions 0-2 = bottom left / middle / right, 3-4 = centre */
+#npc-cutin { position: fixed; z-index: 8; bottom: 0; pointer-events: none; }
+#npc-cutin.pos-0 { left: 0; }
+#npc-cutin.pos-1 { left: 50%; transform: translateX(-50%); }
+#npc-cutin.pos-2 { right: 0; }
+#npc-cutin.pos-3, #npc-cutin.pos-4 { top: 50%; bottom: auto; left: 50%; transform: translate(-50%, -50%); }
+#npc-cutin img { display: block; height: min(66vh, 480px); width: auto; filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.5)) drop-shadow(-6px 4px 10px rgba(0, 0, 0, 0.28)); }
+#npc-cutin.pos-3 img, #npc-cutin.pos-4 img { height: min(56vh, 400px); }
+#npc-cutin .cutin-name { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); padding: 3px 18px 4px; white-space: nowrap;
+  border: 1px solid #c9a24a; border-radius: 2px; background: linear-gradient(90deg, rgba(20, 24, 40, 0), rgba(20, 24, 40, 0.86) 18%, rgba(20, 24, 40, 0.86) 82%, rgba(20, 24, 40, 0));
+  border-left: 0; border-right: 0; color: #fff4d6; font: 700 14px/18px var(--title-font); letter-spacing: 0.04em; text-shadow: 0 1px 2px #000; }
+#npc-cutin .cutin-name:empty { display: none; }
+@keyframes cutinIn { from { opacity: 0; translate: 24px 0; } }
+#npc-cutin:not([hidden]) img { animation: cutinIn 0.28s cubic-bezier(0.2, 0.8, 0.3, 1); }

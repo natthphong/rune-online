@@ -1,0 +1,47 @@
+{
+  "name": "client",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p . && vite build",
+    "typecheck": "tsc -p .",
+    "preview": "vite preview",
+    "smoke": "node scripts/smoke.ts",
+    "grind": "node scripts/grind.ts",
+    "items": "node scripts/items.ts",
+    "cards": "node scripts/cards.ts",
+    "quest": "node scripts/quest.ts",
+    "refine": "node scripts/refine.ts",
+    "town": "node scripts/town.ts",
+    "jobs": "node scripts/jobs.ts",
+    "auto": "node scripts/auto.ts",
+    "boss": "node scripts/boss.ts",
+    "clickskill": "node scripts/clickskill.ts",
+    "devo": "node scripts/devo.ts",
+    "dungeon": "node scripts/dungeon.ts",
+    "floor2": "node scripts/floor2.ts",
+    "playthrough": "node scripts/playthrough.ts",
+    "status": "node scripts/status.ts",
+    "friends": "node scripts/friends.ts",
+    "party": "node scripts/party.ts",
+    "duel": "node scripts/duel.ts",
+    "pets": "node scripts/pets.ts",
+    "legend": "node scripts/legend.ts",
+    "load": "node scripts/load.ts",
+    "jobs2": "node scripts/jobs2.ts",
+    "i18n": "node scripts/i18n-check.ts"
+  },
+  "dependencies": {
+    "@colyseus/sdk": "^0.18.5",
+    "@fontsource/cinzel": "^5.3.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/three": "^0.186.0",
+    "playwright-core": "1.63.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.4"
+  }
+}

@@ -1,0 +1,5 @@
+packages:
+  - client
+  - server
+allowBuilds:
+  msgpackr-extract: false

@@ -1,0 +1,3 @@
+ALTER TABLE characters
+  ADD COLUMN level int NOT NULL DEFAULT 1,
+  ADD COLUMN exp   int NOT NULL DEFAULT 0;

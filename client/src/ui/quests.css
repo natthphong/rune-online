@@ -1,0 +1,83 @@
+/* Quests: the always-visible tracker under the minimap (click = auto-walk there), the quest window (Alt+U), "!" / "?"
+   marks over NPC heads (questinfo / showevent), the reward feed and the "Auto-navigating..." label. Own skin. */
+
+/* ---------- tracker ----------
+   Like the original's quest display: bare regular-weight text under the minimap, quest title in yellow, objectives in white
+   with live counts, flush left under the title; no panel, no prefix marks. The type reads through a light 1-px shadow (heaviest
+   to the lower right, like the chat's) rather than a full black outline, so it stays the weight of the rest of the HUD's
+   type. It stops short of the right edge, which stays free for a column of status icons. */
+:root { --qt-outline: 1px 1px 0 #000, 1px 0 0 rgba(0, 0, 0, 0.75), 0 1px 0 rgba(0, 0, 0, 0.75), -1px 0 0 rgba(0, 0, 0, 0.4), 0 -1px 0 rgba(0, 0, 0, 0.4); }
+#quest-tracker { position: fixed; top: 158px; right: 42px; z-index: 6; width: 228px; font: normal 12px/15px Arial, Helvetica, var(--ui-font);
+  pointer-events: none; }
+#quest-tracker[hidden] { display: none; }
+.qt-head { display: flex; justify-content: flex-end; height: 13px; }
+.qt-head span { display: none; }
+.qt-head button { height: 13px; padding: 0 2px; border: 0; background: none; color: #d8dce6; font: 10px/13px Arial, Helvetica, var(--ui-font);
+  text-shadow: var(--qt-outline); opacity: 0.75; pointer-events: auto; }
+.qt-head button:hover { opacity: 1; color: #fff; }
+#quest-tracker.folded .qt-quest { display: none; }
+.qt-quest { padding: 0 0 5px; pointer-events: auto; cursor: pointer; }
+.qt-title { color: #fff04a; font-weight: normal; text-shadow: var(--qt-outline); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qt-quest:hover .qt-title { text-decoration: underline; }
+/* the story chain's quests carry a tag, like RO3's orange [Main Quest] prefix */
+.qt-tag { color: #ffab3d; }
+.q-list .qt-tag { color: #c05a00; font-weight: bold; }
+.qt-obj { color: #fff; font-weight: normal; text-shadow: var(--qt-outline); }
+.qt-obj b { margin-left: 4px; font-weight: normal; }
+.qt-obj.done { color: #c8ccd6; }
+.qt-obj.done b { color: #8dff7a; }
+@keyframes qtFlash { 0%, 45% { filter: drop-shadow(0 0 4px rgba(255, 240, 74, 0.95)); } }
+.qt-quest.flash { animation: qtFlash 1.4s ease-out; }
+
+/* ---------- quest window ---------- */
+#w-quest { top: 110px; left: calc(50% + 60px); width: 336px; }
+.q-list { margin: 0; padding: 0; list-style: none; max-height: 132px; overflow-y: auto; border: 1px solid #d3d9e6; border-radius: 3px; scrollbar-width: thin; }
+.q-list li { display: flex; align-items: center; gap: 6px; height: 22px; padding: 0 6px; border-bottom: 1px solid #eef0f5; cursor: pointer; }
+.q-list li:last-child { border-bottom: 0; }
+.q-list li:hover { background: #eef3fd; }
+.q-list li.on { background: #dbe6fb; }
+.q-list li .q-name { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #26304a; }
+.q-list li.off .q-name { color: #98a0b3; }
+.q-list li .q-prog { color: #6a748c; font-size: 10px; }
+.q-list li .q-prog.ready { color: #2f8a3a; font-weight: bold; }
+.q-list input { margin: 0; accent-color: var(--accent); cursor: pointer; }
+.q-empty { padding: 22px 0; color: #8a93a8; text-align: center; }
+.q-detail { max-height: 270px; margin-top: 6px; overflow-y: auto; scrollbar-width: thin; }
+.q-title { margin: 2px 0 6px; color: #000091; font-size: 12px; font-weight: bold; text-align: center; }
+.q-desc { margin: 0 0 4px; color: #333; line-height: 1.45; }
+.q-sec h4 { margin: 8px 0 3px; padding-bottom: 1px; border-bottom: 1px dashed #aec2e8; color: #4a5470; font-size: 11px; }
+.q-row { display: flex; justify-content: space-between; gap: 8px; line-height: 17px; }
+.q-row.done { color: #2f8a3a; }
+.q-row a { color: #c00000; text-decoration: underline; cursor: pointer; }
+.q-rewards { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.q-rewards span { display: inline-flex; align-items: center; gap: 4px; }
+.q-rewards .icon { width: 24px; height: 24px; transform: scale(0.75); transform-origin: left center; margin-right: -6px; }
+.q-time { margin-top: 6px; color: #b05a00; }
+#btn-quest svg { fill: none; stroke: currentColor; stroke-width: 1.5; }
+
+/* ---------- marks over NPC heads ---------- */
+.quest-mark { position: absolute; z-index: 2; width: 26px; height: 32px; margin-left: -13px; margin-top: -32px; pointer-events: none;
+  animation: qmBob 1.3s ease-in-out infinite; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.45)); }
+.quest-mark svg { width: 100%; height: 100%; overflow: visible; }
+@keyframes qmBob { 50% { translate: 0 -4px; } }
+
+/* ---------- reward feed ---------- */
+#reward-feed { position: fixed; left: 8px; top: 42%; z-index: 6; display: grid; gap: 3px; justify-items: start; pointer-events: none; }
+.rf-row { display: flex; align-items: center; gap: 6px; min-width: 168px; height: 26px; padding: 0 16px 0 4px; color: #fff;
+  font: 12px/18px Arial, Helvetica, var(--ui-font); text-shadow: 1px 1px 0 #000;
+  background: linear-gradient(90deg, rgba(14, 18, 30, 0.78), rgba(14, 18, 30, 0.55) 70%, rgba(14, 18, 30, 0));
+  animation: rfIn 0.25s cubic-bezier(0.2, 0.8, 0.3, 1), rfOut 0.6s ease-in 4.4s forwards; }
+.rf-row em { color: #ffe27a; font-style: normal; font-weight: bold; }
+.rf-row.quest { color: #ffd65a; font-weight: bold; }
+.rf-row .rf-ic { display: grid; place-items: center; width: 22px; height: 22px; }
+.rf-row .rf-ic .icon { transform: scale(0.66); }
+.rf-row .rf-ic svg { width: 18px; height: 18px; }
+@keyframes rfIn { from { opacity: 0; translate: -14px 0; } }
+@keyframes rfOut { to { opacity: 0; translate: -10px 0; } }
+
+/* ---------- auto-navigation ---------- */
+#navi-label { position: fixed; left: 50%; bottom: 112px; z-index: 6; transform: translateX(-50%); padding: 3px 18px 4px; border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 2px; background: rgba(10, 12, 20, 0.74); color: #fff; font: 12px/16px Arial, Helvetica, var(--ui-font); letter-spacing: 0.02em;
+  text-shadow: 1px 1px 0 #000; pointer-events: none; }
+#navi-label[hidden] { display: none; }
+#navi-label small { margin-left: 6px; color: #b9c2d8; font-size: 11px; }

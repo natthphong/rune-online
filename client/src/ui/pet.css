@@ -1,0 +1,42 @@
+/* Pet window (Alt+J), egg list and the taming cursor. Same family as the other .win windows (style.css). */
+#w-pet { top: 150px; left: 80px; width: 248px; min-width: 0; }
+#w-pet-eggs { top: 200px; left: 340px; width: 190px; min-width: 0; }
+.pet-none p { margin: 8px 0 2px; color: #77809a; text-align: center; }
+.pet-none .pet-hint { margin-top: 2px; font-size: 10px; color: #98a0b3; }
+.pet-top { display: flex; gap: 6px; }
+.pet-portrait { flex: none; width: 96px; height: 96px; border: 1px solid #a8b5c6; border-radius: 3px; background: radial-gradient(#fdfdff, #dfe7f6); }
+.pet-id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.pet-name { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #26304a; font-size: 12px; }
+.pet-sub { display: flex; align-items: center; gap: 6px; color: #5a6280; }
+.pet-kind { padding: 0 6px; border: 1px solid #8d9ac0; border-radius: 8px; font-size: 10px; background: #eef1f8; }
+.pet-kind.battle { border-color: #c86a5c; background: #fde7e3; color: #8a2a1e; }
+.pet-kind.support { border-color: #5aa05f; background: #e6f6e3; color: #1f5a22; }
+.pet-kind.companion { border-color: #c9a24a; background: #fff4d6; color: #6a4a08; }
+.pet-ren { display: flex; gap: 3px; margin-top: auto; }
+.pet-ren[hidden] { display: none; }
+.pet-ren input { flex: 1; min-width: 0; height: 18px; padding: 0 4px; border: 1px solid #a4acbd; border-radius: 2px; background: #fff; color: #2b3350; font: 11px var(--win-font); user-select: text; }
+.pet-stat { display: grid; grid-template-columns: 48px 1fr; align-items: center; row-gap: 1px; margin-top: 6px; color: #5a6280; }
+.pet-stat span { grid-column: 2; font-size: 10px; color: #6b7390; }
+.pet-gauge { position: relative; height: 9px; border: 1px solid #5f6a94; border-radius: 5px; background: #dfe2ea; overflow: hidden; }
+.pet-gauge i { display: block; height: 100%; background: linear-gradient(#ffe39a, #e8a63e); }
+.pet-gauge.hunger.low i { background: linear-gradient(#ff9a8f, #e0483a); }
+.pet-gauge.love i { background: linear-gradient(#ffc2d8, #ec6e9c); }
+.pet-btns { display: flex; gap: 4px; margin-top: 8px; }
+.pet-btns button, .pet-ren button { flex: 1; height: 18px; padding: 0 4px; border: 1px solid #8d9ac0; border-radius: 3px; background: linear-gradient(#fff, #dfe6f6); color: #34406a; font: 11px/16px var(--win-font); white-space: nowrap; }
+.pet-btns button:hover, .pet-ren button:hover { background: linear-gradient(#fff, #cfdbf6); }
+.pet-ren button { flex: none; }
+.pet-auto { display: flex; align-items: center; gap: 4px; margin-top: 6px; color: #5a6280; }
+.pet-auto[hidden] { display: none; }
+.egg-list { margin: 0; padding: 0; list-style: none; max-height: 200px; overflow-y: auto; border: 1px solid #d3d9e6; border-radius: 3px; }
+.egg { display: flex; align-items: center; gap: 6px; padding: 2px 5px; border-bottom: 1px solid #eef0f5; cursor: pointer; color: #26304a; }
+.egg:hover { background: #eef3fd; }
+.egg-none { padding: 8px; color: #98a0b3; text-align: center; }
+.label.pet { color: #ffb8d6; text-shadow: 0 0 3px #7a1d4a, 0 1px 1px #000; font-size: 10px; }
+body.pet-cursor, body.pet-cursor #view { cursor: crosshair; }
+/* 2.4.0 legendary pets: gold name label over the pet, a "Legendary" badge and a gold portrait frame in the window */
+.label.pet.legendary { color: #ffd862; font-weight: bold; text-shadow: 0 0 4px #c46a00, 0 0 2px #000, 0 1px 1px #000; }
+.pet-namerow { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.pet-rarity { flex: none; padding: 0 5px; border: 1px solid #c58a12; border-radius: 8px; font-size: 9px; font-weight: bold; letter-spacing: .3px; color: #6a4300; background: linear-gradient(#fff3c2, #f5c84a); box-shadow: 0 0 4px rgba(245, 190, 60, .7); }
+.pet-rarity[hidden] { display: none; }
+#w-pet.legendary .pet-name { color: #9a5b00; }
+#w-pet.legendary .pet-portrait { border-color: #d9a43a; background: radial-gradient(#fffbea, #f8e3a8); box-shadow: 0 0 6px rgba(240, 180, 50, .6); }

@@ -1,0 +1,19 @@
+/* C11: card compound window (ui/cards.ts) and the card-slot pips on gear. */
+#w-card { top: 140px; left: calc(50% - 170px); width: 340px; }
+#card-intro { margin: 0 0 6px; line-height: 1.4; }
+#card-list { display: grid; gap: 2px; max-height: 260px; overflow-y: auto; scrollbar-width: thin; }
+.card-row { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 6px; padding: 2px 4px; border: 1px solid transparent; border-radius: 3px; cursor: pointer; text-align: left; background: transparent; }
+.card-row:nth-child(odd) { background: rgba(214, 222, 238, 0.35); }
+.card-row:hover { border-color: #9fb3dd; }
+.card-row.on { border-color: var(--accent); background: rgba(120, 160, 235, 0.28); }
+.card-row small { display: block; color: #6b7390; font-size: 10px; }
+#card-note { flex: 1; font-size: 10px; line-height: 1.25; }
+/* a row of small squares: one per slot, filled when a card is inside */
+.pips { display: inline-flex; gap: 2px; vertical-align: middle; }
+.pips i { width: 7px; height: 7px; border: 1px solid #5a6385; border-radius: 1px; background: #fff; box-sizing: border-box; }
+.pips i.on { background: #3f66b8; border-color: #243a73; }
+.slotcell > .pips { position: absolute; left: 2px; top: 2px; z-index: 2; pointer-events: none; }
+.eq-slot > .pips { flex: none; flex-direction: column; }
+#item-tip .cardline { display: block; color: #cfe0ff; }
+#item-tip .cardline.empty { color: #8791b5; }
+#item-tip .cardfx { display: block; color: #bfe8c0; }
