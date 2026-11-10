@@ -3,7 +3,7 @@
 import spawnText from "../../shared/data/spawns.txt?raw";
 import { WARPS, type MapName } from "../../shared/maps.ts";
 import { preloadMobs } from "./animSprite.ts";
-import { ART_STANDIN } from "../../shared/mobart.ts";
+import { ART_STANDIN, artOf } from "../../shared/mobart.ts";
 
 const speciesOf = new Map<string, Set<number>>();
 for (const line of spawnText.split("\n")) {
@@ -20,7 +20,7 @@ const warm = (map: string) => {
   if (done.has(map)) return;
   done.add(map);
   const ids = [...(speciesOf.get(map) ?? [])];
-  preloadMobs([...ids, ...ids.filter((id) => id in ART_STANDIN).map((id) => ART_STANDIN[id])]); // W03: stand-in art too
+  preloadMobs([...ids, ...ids.filter((id) => id in ART_STANDIN).map((id) => ART_STANDIN[id]), ...ids.map(artOf).filter((a) => !ids.includes(a))]); // W03: stand-in art too; 2.7.0 tower species' base sheets
 };
 
 /** Call when a map is about to be joined (before the room answers), then again nothing: the neighbours are queued here. */

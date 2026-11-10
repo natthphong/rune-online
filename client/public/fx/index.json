@@ -1,0 +1,301 @@
+{
+ "slam": {
+  "src": "impacts/ground-slam",
+  "w": 236,
+  "h": 159,
+  "cols": 5,
+  "n": 36,
+  "fps": 20,
+  "add": false,
+  "pivot": [
+   118,
+   116
+  ]
+ },
+ "landing": {
+  "src": "impacts/heavy-landing",
+  "w": 137,
+  "h": 43,
+  "cols": 3,
+  "n": 24,
+  "fps": 20,
+  "add": false,
+  "pivot": [
+   70,
+   28
+  ]
+ },
+ "spike": {
+  "src": "nature/earth-spike",
+  "w": 246,
+  "h": 142,
+  "cols": 5,
+  "n": 34,
+  "fps": 20,
+  "add": false,
+  "pivot": [
+   115,
+   125
+  ]
+ },
+ "quake": {
+  "src": "nature/quake",
+  "w": 253,
+  "h": 80,
+  "cols": 4,
+  "n": 36,
+  "fps": 20,
+  "add": false,
+  "pivot": [
+   131,
+   65
+  ]
+ },
+ "boom": {
+  "src": "explosions/big-explosion",
+  "w": 307,
+  "h": 242,
+  "cols": 5,
+  "n": 26,
+  "fps": 12,
+  "add": false,
+  "pivot": [
+   157,
+   214
+  ]
+ },
+ "darkboom": {
+  "src": "shadow/dark-explosion",
+  "w": 249,
+  "h": 229,
+  "cols": 5,
+  "n": 27,
+  "fps": 15,
+  "add": false,
+  "pivot": [
+   125,
+   190
+  ]
+ },
+ "poison": {
+  "src": "nature/poison-cloud",
+  "w": 214,
+  "h": 54,
+  "cols": 3,
+  "n": 29,
+  "fps": 12,
+  "add": false,
+  "pivot": [
+   107,
+   42
+  ]
+ },
+ "acid": {
+  "src": "nature/acid-splash",
+  "w": 113,
+  "h": 96,
+  "cols": 6,
+  "n": 32,
+  "fps": 20,
+  "add": false,
+  "pivot": [
+   56,
+   81
+  ]
+ },
+ "fireburst": {
+  "src": "explosions/small-explosion",
+  "w": 215,
+  "h": 206,
+  "cols": 6,
+  "n": 32,
+  "fps": 18,
+  "add": false,
+  "pivot": [
+   104,
+   162
+  ]
+ },
+ "lightning": {
+  "src": "lightning/lightning-strike",
+  "w": 227,
+  "h": 262,
+  "cols": 6,
+  "n": 24,
+  "fps": 20,
+  "add": true,
+  "pivot": [
+   113,
+   228
+  ]
+ },
+ "flash": {
+  "src": "impacts/hit-flash",
+  "w": 61,
+  "h": 56,
+  "cols": 4,
+  "n": 11,
+  "fps": 30,
+  "add": true,
+  "pivot": [
+   24,
+   54
+  ]
+ },
+ "blunt": {
+  "src": "impacts/blunt-hit",
+  "w": 90,
+  "h": 76,
+  "cols": 5,
+  "n": 21,
+  "fps": 30,
+  "add": false,
+  "pivot": [
+   48,
+   61
+  ]
+ },
+ "crit": {
+  "src": "impacts/crit-hit",
+  "w": 164,
+  "h": 121,
+  "cols": 5,
+  "n": 24,
+  "fps": 30,
+  "add": false,
+  "pivot": [
+   67,
+   93
+  ]
+ },
+ "spark": {
+  "src": "impacts/hit-spark",
+  "w": 116,
+  "h": 69,
+  "cols": 3,
+  "n": 14,
+  "fps": 30,
+  "add": true,
+  "pivot": [
+   28,
+   56
+  ]
+ },
+ "slash2": {
+  "src": "melee/double-slash",
+  "w": 118,
+  "h": 98,
+  "cols": 5,
+  "n": 20,
+  "fps": 30,
+  "add": false,
+  "pivot": [
+   7,
+   83
+  ]
+ },
+ "cleave": {
+  "src": "melee/heavy-cleave",
+  "w": 151,
+  "h": 101,
+  "cols": 5,
+  "n": 29,
+  "fps": 24,
+  "add": false,
+  "pivot": [
+   48,
+   82
+  ]
+ },
+ "reap": {
+  "src": "melee/scythe-reap",
+  "w": 124,
+  "h": 66,
+  "cols": 5,
+  "n": 31,
+  "fps": 24,
+  "add": false,
+  "pivot": [
+   56,
+   59
+  ]
+ },
+ "arcane": {
+  "src": "arcane/mana-burst",
+  "w": 166,
+  "h": 143,
+  "cols": 5,
+  "n": 28,
+  "fps": 20,
+  "add": true,
+  "pivot": [
+   87,
+   118
+  ]
+ },
+ "frost": {
+  "src": "ice/frost-nova",
+  "w": 256,
+  "h": 128,
+  "cols": 5,
+  "n": 36,
+  "fps": 20,
+  "add": false,
+  "pivot": [
+   126,
+   90
+  ]
+ },
+ "holy": {
+  "src": "holy/smite",
+  "w": 182,
+  "h": 176,
+  "cols": 6,
+  "n": 28,
+  "fps": 20,
+  "add": false,
+  "pivot": [
+   91,
+   148
+  ]
+ },
+ "zap": {
+  "src": "lightning/zap-hit",
+  "w": 122,
+  "h": 94,
+  "cols": 5,
+  "n": 24,
+  "fps": 30,
+  "add": true,
+  "pivot": [
+   75,
+   47
+  ]
+ },
+ "heal": {
+  "src": "holy/heal",
+  "w": 44,
+  "h": 83,
+  "cols": 8,
+  "n": 32,
+  "fps": 20,
+  "add": true,
+  "pivot": [
+   22,
+   72
+  ]
+ },
+ "poof": {
+  "src": "spawn/poof",
+  "w": 85,
+  "h": 75,
+  "cols": 5,
+  "n": 24,
+  "fps": 20,
+  "add": false,
+  "pivot": [
+   39,
+   64
+  ]
+ }
+}

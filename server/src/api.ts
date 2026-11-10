@@ -1,12 +1,15 @@
 // Account + character HTTP API (the "login/char server" half of rAthena, folded into the game server).
 //   POST /api/register {username, password}        POST /api/login {username, password} -> {token}
 //   POST /api/logout                               GET  /api/characters
-//   POST /api/characters {slot, name, gender, hair, style?}
+//   POST /api/characters {slot, name, gender, hair, style?, job?}   job: "Novice" (default) or a first job (rules/jobstart.ts)
 //   DELETE /api/characters/:id {confirmName}
 // Auth: "Authorization: Bearer <token>" (Redis session, sliding 12 h). Game rooms take the same token in join options.
 import express, { type Request, type Response, type NextFunction } from "express";
 import { TOWN_SAVE, TOWN_START } from "../../shared/maps.ts";
-import { GENDERS, HAIR_COLORS, HAIR_STYLES, MAX_SLOTS, NAME_RE, USERNAME_RE, outfitOf, visualsOf, type CharacterSummary, type Look } from "../../shared/look.ts";
+import { GENDERS, HAIR_COLORS, HAIR_STYLES, MAX_SLOTS, NAME_RE, USERNAME_RE, isStartJob, outfitOf, visualsOf, type CharacterSummary, type Look } from "../../shared/look.ts";
+import { jobStart, startHotkeys, startSkillRows } from "../../shared/rules/jobstart.ts";
+import type { FirstJob } from "../../shared/rules/data.ts";
+import { statPointsAt } from "../../shared/rules/exp.ts";
 import { ITEMS, gearOf } from "../../shared/rules/items.ts";
 import { JOBS, type JobKey } from "../../shared/rules/data.ts";
 import { playerStatus } from "../../shared/rules/status.ts";
@@ -50,7 +53,7 @@ const styleOf = (row: { hairdo?: number }) => (row.hairdo ?? 0) % HAIR_STYLES.le
 
 export function lookOf(row: { gender: string; hair_color: number; hairdo?: number; job: string }, worn: number[]): Look {
   const v = visualsOf(worn.map((id) => ITEMS.get(id)).filter((i) => !!i).map((i) => ({ id: i!.id, type: i!.type, subType: i!.subType })));
-  return { gender: row.gender === "F" ? "F" : "M", hair: row.hair_color % HAIR_COLORS.length, style: styleOf(row), outfit: outfitOf(row.job), ...v };
+  return { gender: row.gender === "F" ? "F" : "M", hair: row.hair_color % HAIR_COLORS.length, style: styleOf(row), outfit: outfitOf(row.job), job: row.job, ...v }; // job: the layered body key, like the in-world look (main.ts lookOfState)
 }
 
 async function requireAuth(req: AuthedReq, res: Response, next: NextFunction) {
@@ -119,16 +122,36 @@ export function registerApi(app: express.Application) {
     if (!GENDERS.includes(gender)) return bad(res, 400, "invalid gender");
     if (!Number.isInteger(hair) || hair < 0 || hair >= HAIR_COLORS.length) return bad(res, 400, "invalid hair colour");
     if (!Number.isInteger(style) || style < 0 || style >= HAIR_STYLES.length) return bad(res, 400, "invalid hair style");
+    // 2.7.0: an optional starting job ("Novice" = the Fledgling, the old path); anything else must be a first job (rules/jobstart.ts)
+    const job = b.job === undefined || b.job === null ? "Novice" : b.job;
+    if (!isStartJob(job)) return bad(res, 400, "invalid job");
+    const start = job === "Novice" ? undefined : jobStart(job);
+    if (job !== "Novice" && !start) return bad(res, 400, "invalid job");
+    const c = await db.connect();
     try {
+      await c.query("BEGIN");
       // W01: new characters start in Hearthmoor's plaza, inside Guide Lio's greeting area, with the town's hearth as save point
-      const { rows } = await db.query(
-        `INSERT INTO characters (name, x, y, last_map, save_map, save_x, save_y, account_id, slot, gender, hair_color, hairdo)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
-        [name, TOWN_START.x, TOWN_START.y, TOWN_START.map, TOWN_SAVE.map, TOWN_SAVE.x, TOWN_SAVE.y, req.session!.accountId, slot, gender, hair, style]);
+      const { rows } = await c.query(
+        `INSERT INTO characters (name, x, y, last_map, save_map, save_x, save_y, account_id, slot, gender, hair_color, hairdo, job)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *`,
+        [name, TOWN_START.x, TOWN_START.y, TOWN_START.map, TOWN_SAVE.map, TOWN_SAVE.x, TOWN_SAVE.y, req.session!.accountId, slot, gender, hair, style, job]);
+      if (start) {
+        // the state pc_jobchange leaves for a graduate: Basic Training 9 + the starter skills learned, on the first shortcut slots
+        // (the first login adds the weapon; its bar seeding only fills empty slots after these)
+        for (const [id, lv] of startSkillRows(job as FirstJob)) await c.query("INSERT INTO skill (char_id, id, lv) VALUES ($1, $2, $3)", [rows[0].id, id, lv]);
+        // the Base Level its weapon can be worn at (rules/jobstart.ts) and that level's status points; the job level stays 1
+        const upd = await c.query("UPDATE characters SET hotkeys = $2, level = $3, stat_points = $4, zeny = $5 WHERE id = $1 RETURNING *",
+          [rows[0].id, JSON.stringify(startHotkeys(job as FirstJob)), start.level, statPointsAt(start.level), start.zeny ?? 0]);
+        rows[0] = upd.rows[0];
+      }
+      await c.query("COMMIT");
       res.json(summarize(rows[0]));
     } catch (e: any) {
+      await c.query("ROLLBACK").catch(() => {});
       if (e.code === "23505") return bad(res, 409, e.constraint === "characters_account_slot" ? "that slot is already used" : "that name is taken");
       throw e;
+    } finally {
+      c.release();
     }
   });
 

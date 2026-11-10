@@ -144,3 +144,18 @@ f2_dun01,31,34,5,4	monster	Ashhound	1013,4,5000
 f2_dun01,10,45,3,3	monster	Slagimp	1123,3,5000
 f2_dun01,54,45,3,3	monster	Slagimp	1123,3,5000
 f2_dun01,32,53	boss_monster	Devo	3999,1,3600000,3600000
+
+// f3_field01 Witherwick, floor 3 (2.7.0; 120x120, Lv 50-58): ONE map for the whole floor. In from floor 2 at the south road's end
+// (60,117 -> arrival 60,113), the survivors' camp just north of it, the ruined village around the green (60,60), the chapel ruin
+// (60,34) and the graveyard (84,32). Plaguewalkers in the village lanes and the south fields, Rotfangs west, Blightwings east,
+// Hexbound Sentries on the west lane, Witchbones in the north. The floor GUARDIAN (Morrowgast, 4310) has no line here: the Tower
+// rule spawns it at a random spot of the map (server/src/tower.ts). Mini-boss: Ashgrim, the goat-demon of the graveyard.
+f3_field01,60,88,8,6	monster	Plaguewalker	4301,8,5000
+f3_field01,60,66,10,8	monster	Plaguewalker	4301,8,5000
+f3_field01,26,84,7,6	monster	Rotfang	4302,7,5000
+f3_field01,22,58,6,6	monster	Rotfang	4302,6,5000
+f3_field01,96,86,7,6	monster	Blightwing	4303,7,5000
+f3_field01,98,58,6,6	monster	Blightwing	4303,6,5000
+f3_field01,34,66,6,5	monster	Hexbound Sentry	4304,7,5000
+f3_field01,24,30,7,6	monster	Witchbone	4305,7,5000
+f3_field01,84,32,3,3	boss_monster	Ashgrim	4311,1,1800000,600000

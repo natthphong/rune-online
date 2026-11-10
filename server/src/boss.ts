@@ -6,7 +6,7 @@
 //   mob.cpp  mob_ai_sub_hard_slavemob  (a slave dies with a missing master, follows it, takes the master's target)
 //   mob.cpp  mobskill_use / mob_summonslave / mobskill_delay  (NPC_SUMMONSLAVE: onspawn, then re-summon when the slaves are gone)
 //   npc.cpp  run_tomb           (the tomb's dialog: who, when, killed by)
-import { Msg, type AnnounceEvent, type BossChargeEvent, type BossSlamEvent, type BossSpitEvent, type BossSplitEvent, type DevBossMsg, type HitEvent, type ItemGetEvent, type MvpEvent, type MvpRewardEvent } from "../../shared/protocol.ts";
+import { Msg, type AnnounceEvent, type BossAggroEvent, type BossHopEvent, type BossImpactEvent, type BossShape, type BossTeleEvent, type BossChargeEvent, type BossSlamEvent, type BossSpitEvent, type BossSplitEvent, type DevBossMsg, type HitEvent, type ItemGetEvent, type MvpEvent, type MvpRewardEvent } from "../../shared/protocol.ts";
 import type { Client, Delayed } from "@colyseus/core";
 import { MOB_BY_ID, type Mob } from "../../shared/rules/data.ts";
 import { ITEMS } from "../../shared/rules/items.ts";
@@ -15,11 +15,12 @@ import { floorLoot, mobDeadLootOwners } from "../../shared/rules/drops.ts";
 import { ATK, BL, mobAttack } from "../../shared/rules/battle.ts";
 import type { MobStatus } from "../../shared/rules/status.ts";
 import {
-  BOSS_MOVES, chargeCooldown, chargeDue, chargeLane, headbuttDue, inLaneReach, isEnraged, knockbackCell, rateDamage, spitDamage, spitDue, spitFlightMs, splitsDue,
-  type BossMoves,
+  BOSS_MOVES, IDLE_MAX_MS, areaDue, chargeCooldown, chargeDue, chargeLane, headbuttDue, hopCell, inLaneReach, inShape, isEnraged, isRaged, knockbackCell, lineEnd,
+  ragedMs, rateDamage, safeSpots, spitDamage, spitDue, spitFlightMs, splitsDue,
+  type BossArea, type BossMoves, type Cell, type Shape,
 } from "../../shared/rules/bossmoves.ts";
 import { SCSTART } from "../../shared/rules/status_change.ts";
-import { MD, hasMode } from "../../shared/rules/mobai.ts";
+import { MD, canReach, hasMode } from "../../shared/rules/mobai.ts";
 import { searchFreeCell, type SpawnData } from "../../shared/rules/spawn.ts";
 import { distance, pathSearchLong, walkable } from "../../shared/map.ts";
 import {
@@ -36,7 +37,16 @@ export type { Tomb } from "./tombs.ts";
 /** Per boss monster: mob skill timers (md->skilldelay of its summon rows, md->last_skillcheck) and a running cast (ud->skilltimer). */
 type SkillClock = { readyAt: number; checkAt: number; casting: boolean };
 /** Per boss with our own floor-boss moves (shared/rules/bossmoves.ts): the next spit and the split rows already used. */
-type MoveClock = { moves: BossMoves; spitAt: number; fired: Set<number>; shouted: Set<number>; chargeAt: number; headAt: number; busyUntil: number };
+type MoveClock = {
+  moves: BossMoves; spitAt: number; fired: Set<number>; shouted: Set<number>; chargeAt: number; headAt: number; busyUntil: number;
+  // 2.7.0 boss feel: area cooldowns by name, the gap between two moves, the reposition hop, what it was doing last and when
+  areaAt: Map<string, number>; gcdAt: number; hopAt: number; lastAct: number; actUntil: number; engaged?: string; roarAt: number; raged: boolean;
+  /** the species' own walk time / attack delay (mob_db), before the run and the enrage */
+  walkMs: number; delayMs: number;
+  /** fight numbers for the dev "stat" op and the report: the longest time it stood idle with a target, moves started by name */
+  idleMax: number; used: Record<string, number>;
+};
+type BossBrain = NonNullable<ReturnType<MapRoom["brains"]["get"]>>;
 
 export class BossSystem {
   readonly tombs: Tombs;
@@ -66,10 +76,18 @@ export class BossSystem {
     const def = MOB_BY_ID.get(mon.mobId)!;
     mon.boss = bossKindOf(def);
     this.tombs.destroy(id);
+    this.room.tower.spawned(id, mon); // 2.7.0: the floor guardian rose (announce, hint)
     this.casters.delete(id);
     this.movers.delete(id);
     const moves = BOSS_MOVES.get(mon.mobId);
-    if (moves) this.movers.set(id, { moves, spitAt: this.room.clock.currentTime + 1000, fired: new Set(), shouted: new Set(), chargeAt: this.room.exactNow() + 3000, headAt: this.room.exactNow() + 2000, busyUntil: 0 });
+    if (moves) {
+      const t = this.room.exactNow();
+      this.movers.set(id, {
+        moves, spitAt: this.room.clock.currentTime + 1000, fired: new Set(), shouted: new Set(), chargeAt: t + 3000, headAt: t + 2000, busyUntil: 0,
+        areaAt: new Map((moves.areas ?? []).map((a, i) => [a.name, t + 2500 + i * 1500])), gcdAt: 0, hopAt: t + (moves.feel?.hopMs ?? 0), lastAct: t, actUntil: 0, roarAt: 0, raged: false,
+        walkMs: def.walkSpeed, delayMs: def.attackDelay, idleMax: 0, used: {},
+      });
+    }
     if (def.slaves.length) {
       this.casters.set(id, { readyAt: 0, checkAt: this.room.clock.currentTime, casting: false });
       this.useSummon(id, "spawn");
@@ -99,11 +117,166 @@ export class BossSystem {
       if (!m || m.dead || !b) { this.movers.delete(id); continue; }
       this.split(id, m, c);
       this.shout(id, m, c);
+      this.feel(id, m, b, c);
       if (this.busy(id, c)) continue;
-      this.headbutt(id, m, b, c);
+      const t = this.room.exactNow();
+      if (c.moves.feel && t < c.gcdAt) continue; // the gap between two moves: it swings / chases meanwhile
+      const before = c.busyUntil, spat = c.spitAt;
+      this.areas(id, m, b, c);
+      if (!this.busy(id, c)) this.headbutt(id, m, b, c);
       if (!this.busy(id, c)) this.charge(id, m, b, c);
       if (!this.busy(id, c)) this.spit(id, m, b, c, now);
+      if (c.moves.feel && (c.busyUntil !== before || c.spitAt !== spat)) {
+        c.gcdAt = Math.max(t, c.busyUntil) + ragedMs(c.moves.feel.gcdMs, c.moves.rage, c.raged);
+        if (c.spitAt !== spat) { c.actUntil = Math.max(c.actUntil, t + 400); c.used.spit = (c.used.spit ?? 0) + 1; }
+      } else if (c.moves.feel) this.hop(id, m, b, c, false);
     }
+  }
+
+  // ---------- 2.7.0 boss feel: aggro on sight, run, opener, enrage, never idle ----------
+  /** After a boss's normal swing (MapRoom.mobSwung): it is busy for the attack motion (the idle watchdog's clock). */
+  swung(id: string, until: number) { const c = this.movers.get(id); if (c) c.actUntil = Math.max(c.actUntil, until); }
+
+  /** Each tick: see a player and turn on it (Msg.bossAggro, the opener ready at once), run while it has a target, enrage under the
+   *  rage threshold, and never stand idle longer than IDLE_MAX_MS with a target (it hops instead). */
+  private feel(id: string, m: Monster, b: BossBrain, c: MoveClock) {
+    const f = c.moves.feel, now = this.room.exactNow();
+    if (!f) return;
+    // enrage: once per life
+    if (!c.raged && isRaged(c.moves, m.hp, m.maxHp)) {
+      c.raged = true;
+      this.room.sendArea("AREA", id, Msg.bossAggro, { id, to: b.target ?? "", enrage: true } satisfies BossAggroEvent);
+    }
+    // aggro on sight: the nearest player it may target within `sight` cells that it can walk to
+    if (!b.target && !this.casting(id) && !this.room.status.cant(id, "attack")) {
+      const here = this.room.cell(m);
+      let best: string | undefined, bd = Infinity;
+      for (const p of this.room.aggroCandidates(this.room.clock.currentTime)) {
+        const d = distance(p.x - here.x, p.y - here.y);
+        if (d <= f.sight && d < bd && canReach(this.room.map, here, p, d + f.sight)) { best = p.id; bd = d; }
+      }
+      if (best) b.target = best;
+    }
+    // a new target: the cue (not more than once every 8 s) and the opener at once
+    if (b.target !== c.engaged) {
+      c.engaged = b.target;
+      if (b.target && this.room.state.players.has(b.target)) {
+        if (now >= c.roarAt) { c.roarAt = now + 8000; this.room.sendArea("AREA", id, Msg.bossAggro, { id, to: b.target } satisfies BossAggroEvent); }
+        c.gcdAt = now + 250;
+        if (f.opener === "charge") c.chargeAt = Math.min(c.chargeAt, now + 250); else if (f.opener) c.areaAt.set(f.opener, 0);
+        c.lastAct = now;
+      }
+    }
+    // run while it has a target; faster still, and swinging faster, once enraged
+    const r = c.raged ? c.moves.rage : undefined;
+    const walkMs = Math.round(c.walkMs * (b.target ? f.runPct / 100 : 1) * (r ? r.walkPct / 100 : 1));
+    const delayMs = Math.round(c.delayMs * (r ? r.aspdPct / 100 : 1));
+    if (b.status.walkMs !== walkMs || b.status.attackDelayMs !== delayMs) b.status = { ...b.status, walkMs, attackDelayMs: delayMs } as typeof b.status;
+    // the idle watchdog
+    if (!b.target || this.room.walking(b) || m.moving || this.busy(id, c) || now < c.actUntil || this.room.status.cant(id, "move")) { c.lastAct = now; return; }
+    const idle = now - c.lastAct;
+    if (idle > IDLE_MAX_MS && this.hop(id, m, b, c, true)) return;
+    if (idle > c.idleMax) c.idleMax = idle;
+  }
+
+  /** The telegraphed area moves (bossmoves.ts `areas`): the first one due starts. */
+  private areas(id: string, m: Monster, b: BossBrain, c: MoveClock, force?: string) {
+    const list = c.moves.areas, now = this.room.exactNow();
+    if (!list) return;
+    const t = this.targetOf(id, b, now);
+    if (!t) return;
+    const a = this.room.cell(m), tc = this.room.cell(t.tgt), dist = distance(tc.x - a.x, tc.y - a.y);
+    const clearLine = pathSearchLong(this.room.map, a.x, a.y, tc.x, tc.y);
+    for (const mv of list) {
+      if (force ? mv.name !== force : !areaDue(mv, { now, readyAt: c.areaAt.get(mv.name) ?? 0, dist, hp: m.hp, maxHp: m.maxHp, clearLine })) continue;
+      this.startArea(id, m, b, c, mv, a, tc, now);
+      return;
+    }
+  }
+
+  /** One area move: the warning(s) to the area now, the boss winding up for castMs, the impact(s) after windMs. */
+  private startArea(id: string, m: Monster, b: BossBrain, c: MoveClock, mv: BossArea, a: Cell, tc: Cell, now: number) {
+    const room = this.room, ok = (x: number, y: number) => walkable(room.map, x, y);
+    c.areaAt.set(mv.name, now + mv.windMs + ragedMs(mv.cooldownMs + this.rnd() % (mv.jitterMs + 1), c.moves.rage, c.raged));
+    c.busyUntil = now + (mv.castMs ?? mv.windMs) + 150;
+    c.used[mv.name] = (c.used[mv.name] ?? 0) + 1;
+    room.stopAttack(id, b);
+    room.haltWalk(m, room.walkOf(b, m));
+    if (mv.text) room.sendArea("AREA", id, Msg.bossSplit, { id, text: mv.text, kind: "roar" } satisfies BossSplitEvent);
+    const shapes: { s: Shape & { shape: BossShape }; at: number }[] = [];
+    if (mv.shape === "line") {
+      const e = lineEnd(a, tc, mv.length ?? 8);
+      shapes.push({ s: { shape: "line", x: a.x, y: a.y, r: mv.r, ex: e.x, ey: e.y }, at: now + mv.windMs });
+    } else if (mv.shape === "sweep") {
+      shapes.push({ s: { shape: "sweep", x: a.x, y: a.y, r: mv.r, safe: safeSpots(ok, a, mv.r, mv.safe ?? 3, mv.safeR ?? 2, (n) => this.rnd() % n) }, at: now + mv.windMs });
+    } else {
+      const centre = mv.at === "self" ? a : tc;
+      shapes.push({ s: { shape: "circle", x: centre.x, y: centre.y, r: mv.r }, at: now + mv.windMs });
+      for (let i = 1; i < (mv.count ?? 1); i++) { // the rest of a rain: scattered around the target, one every stepMs
+        const sp = mv.spread ?? 3, x = tc.x - sp + this.rnd() % (2 * sp + 1), y = tc.y - sp + this.rnd() % (2 * sp + 1);
+        shapes.push({ s: { shape: "circle", x, y, r: mv.r }, at: now + mv.windMs + i * (mv.stepMs ?? 200) });
+      }
+    }
+    for (const { s, at } of shapes) {
+      const geo = { shape: s.shape, x: s.x, y: s.y, r: s.r, ...(s.ex !== undefined ? { ex: s.ex, ey: s.ey } : {}), ...(s.safe ? { safe: [...s.safe] } : {}) };
+      room.sendArea("AREA", id, Msg.bossTele, { id, move: mv.name, ...geo, ms: at - now, ...(mv.leap ? { leap: true } : {}) } satisfies BossTeleEvent);
+      room.timeline.add(at, (t) => {
+        if (room.state.monsters.get(id) !== m || m.dead) return;
+        if (mv.leap) { // it lands on the centre (or the nearest free cell to it)
+          const land = ok(s.x, s.y) ? { x: s.x, y: s.y } : searchFreeCell(room.map, s.x, s.y, 1, 1, FREECELL_TRIES, this.rndValue);
+          if (land) room.warpUnit(m, b, land.x, land.y);
+        }
+        room.sendArea("AREA", id, Msg.bossImpact, { id, move: mv.name, ...geo } satisfies BossImpactEvent);
+        for (const [sid, p] of room.state.players) {
+          if (p.dead || !inShape(s, room.cell(p))) continue;
+          this.areaHit(id, b, sid, mv, { x: s.x, y: s.y }, t);
+        }
+      });
+    }
+  }
+
+  /** An area move's hit on one player: the normal attack's damage x rate, never dodged by Flee (walking out is the dodge), then the
+   *  knockback away from the centre, the stun and the slow. */
+  private areaHit(id: string, b: BossBrain, tid: string, mv: BossArea, centre: Cell, at: number) {
+    const room = this.room, p = room.state.players.get(tid), pb = room.brains.get(tid);
+    if (!p || !pb || p.dead || room.invincible(tid, at)) return;
+    const res = mobAttack(b.status as MobStatus, { ...pb.status, noFlee: true, flee2: 0 } as typeof pb.status, { type: BL.PC, targeted: room.targetedCount(tid) });
+    const dmg = rateDamage(mv.dmgRate, res.dmg);
+    room.sendArea("AREA", tid, Msg.hit, { from: id, to: tid, dmg, crit: false, miss: res.miss, lucky: res.lucky, amotion: 0, dmotion: res.miss ? 0 : room.motions(tid).dmotion } satisfies HitEvent);
+    room.applyDamage(id, tid, dmg, at, res.dmgLv);
+    if (p.dead || res.dmgLv <= ATK.BLOCK) return;
+    if (mv.knockback) {
+      const land = knockbackCell((x, y) => walkable(room.map, x, y), centre, room.cell(p), mv.knockback);
+      room.warpUnit(p, pb, land.x, land.y);
+      room.sendArea("AREA", tid, Msg.bossSlam, { from: id, to: tid, kind: "head", kx: land.x, ky: land.y, stunMs: mv.stunMs ?? 0 } satisfies BossSlamEvent);
+    }
+    if (mv.stunMs) room.status.start(id, tid, "Stun", { rate: 10000, val1: 1, duration: mv.stunMs, flag: SCSTART.NOAVOID });
+    if (mv.slowMs && mv.slowLv) room.status.start(id, tid, "DecreaseAgi", { rate: 10000, val1: mv.slowLv, duration: mv.slowMs });
+  }
+
+  /** A reposition hop around the target (in melee reach): every feel.hopMs, and at once (`forced`) when it would stand idle. */
+  private hop(id: string, m: Monster, b: BossBrain, c: MoveClock, forced: boolean): boolean {
+    const f = c.moves.feel, now = this.room.exactNow(), room = this.room;
+    if (!f || (!forced && now < c.hopAt) || room.status.cant(id, "move")) return false;
+    const t = this.targetOf(id, b, now);
+    if (!t) return false;
+    const here = room.cell(m), tc = room.cell(t.tgt), reach = MOB_BY_ID.get(m.mobId)!.range;
+    if (distance(tc.x - here.x, tc.y - here.y) > reach + 1) return false; // not in melee: the chase is the motion
+    const ok = (x: number, y: number) => walkable(room.map, x, y);
+    const to = hopCell(ok, here, tc, (n) => this.rnd() % n, reach);
+    if (!to) return false;
+    const lane = chargeLane(ok, here, to, 0);
+    if (lane.length === 0) return false;
+    const ms = lane.length * 45 + 60;
+    c.hopAt = now + ragedMs(f.hopMs, c.moves.rage, c.raged) + this.rnd() % 800;
+    c.busyUntil = now + ms + 80;
+    c.used.hop = (c.used.hop ?? 0) + 1;
+    room.stopAttack(id, b);
+    room.haltWalk(m, room.walkOf(b, m));
+    const end = lane[lane.length - 1];
+    room.sendArea("AREA", id, Msg.bossHop, { id, x: end.x, y: end.y, ms } satisfies BossHopEvent);
+    lane.forEach((step, i) => room.timeline.add(now + 60 + i * 45, () => { if (room.state.monsters.get(id) === m && !m.dead) room.warpUnit(m, b, step.x, step.y); }));
+    return true;
   }
 
   // ---------- floor-boss moves (shared/rules/bossmoves.ts; our own, not rAthena) ----------
@@ -188,7 +361,8 @@ export class BossSystem {
     if (!t) return;
     const a = this.room.cell(m), cell = this.room.cell(t.tgt);
     if (!headbuttDue(h, { now, readyAt: c.headAt, dist: distance(cell.x - a.x, cell.y - a.y) })) return;
-    c.headAt = now + h.cooldownMs;
+    c.headAt = now + ragedMs(h.cooldownMs, c.moves.rage, c.raged);
+    c.used.head = (c.used.head ?? 0) + 1;
     c.busyUntil = now + h.windMs;
     this.room.haltWalk(m, this.room.walkOf(b, m));
     this.room.sendArea("AREA", id, Msg.bossCharge, { id, kind: "head", ex: a.x, ey: a.y, windMs: h.windMs, dashMs: 0 } satisfies BossChargeEvent);
@@ -228,6 +402,7 @@ export class BossSystem {
     const end = lane[lane.length - 1], dashMs = lane.length * ch.dashMsPerCell;
     c.chargeAt = now + ch.windMs + dashMs + chargeCooldown(ch, this.rnd() % (ch.jitterMs + 1), isEnraged(c.moves, m.hp, m.maxHp));
     c.busyUntil = now + ch.windMs + dashMs + 250;
+    c.used.charge = (c.used.charge ?? 0) + 1;
     this.room.stopAttack(id, b);
     this.room.haltWalk(m, this.room.walkOf(b, m));
     this.room.sendArea("AREA", id, Msg.bossCharge, { id, kind: "charge", ex: end.x, ey: end.y, windMs: ch.windMs, dashMs } satisfies BossChargeEvent);
@@ -347,6 +522,7 @@ export class BossSystem {
     const mvpSid = mvpChar === undefined ? undefined : room.sessionOfChar(mvpChar);
     const mvp = mvpSid === undefined ? undefined : room.state.players.get(mvpSid);
     if (mvp && mvpSid !== undefined) this.reward(id, def, mvpSid, mvp, mvpChar!, owners, attackerCount(log, room.receiver));
+    room.tower.dead(id, mon, [mvpSid, killer, ...owners.map((c) => room.sessionOfChar(c))]); // 2.7.0 the Tower rule: the floor is cleared for their parties
 
     if (tombWanted(lineBoss)) {
       const nameOf = (c: number | undefined) => { const s = c === undefined ? undefined : room.sessionOfChar(c); return s ? room.state.players.get(s)?.name : undefined; };
@@ -422,6 +598,26 @@ export class BossSystem {
           if (!mon || mon.dead) return;
           const dmg = m.op === "kill" ? mon.hp : Math.max(0, Math.min(mon.hp - 1, Number(m.dmg ?? mon.hp - 1)));
           if (dmg > 0) room.applyDamage(client.sessionId, id, dmg, room.exactNow(), ATK.DEF);
+          return;
+        }
+        case "tower": { // 2.7.0: the floor guardian rises now, at a random spot or 8 cells east of the sender (x = 1): footage / the floor3 bot
+          const c = room.cell(p);
+          room.tower.rise(Number(m.x) === 1 ? { x: c.x + 8, y: c.y } : room.tower.pickSpot(c)); // a random spot 25+ cells from the sender
+          client.send(Msg.notice, { text: `[dev] tower: guardian ${room.tower.guardianId ?? "none"} is ${room.tower.where(c.x, c.y)}` });
+          return;
+        }
+        case "var": { // set a permanent character variable of the sender (move = its name, dmg = the value): unlock flags for bots / footage
+          room.npcEngine.setCharVar(client.sessionId, String(m.move), Number(m.dmg ?? 1));
+          return;
+        }
+        case "stat": { // the fight numbers of a boss with moves
+          const c = this.movers.get(id);
+          client.send(Msg.notice, { text: `[dev] stat ${id} ${JSON.stringify(c ? { idleMax: Math.round(c.idleMax), used: c.used, raged: c.raged, hp: mon?.hp, target: room.brains.get(id)?.target ?? null } : null)}` });
+          return;
+        }
+        case "move": { // force an area move by name now
+          const c = this.movers.get(id), b = room.brains.get(id);
+          if (c && b && mon && !mon.dead) { c.busyUntil = 0; this.areas(id, mon, b, c, String(m.move)); }
           return;
         }
         case "remove": { // a test boss and everything of it

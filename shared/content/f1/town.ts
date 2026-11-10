@@ -29,6 +29,8 @@ export const TOWN_NPC = {
 /** The heal fee for climbers past the Fledgling job (healer.txt charges everyone; our Novices rest for free). */
 export const HEAL_FEE = 50;
 const isNovice = (s: Pick<Script, "get">) => s.get("BaseJob") === MAPID.Novice;
+/** A character that holds a first job and Basic Training 9 while Kessa's lesson is still open: it started as that job (Make Character). */
+const startedWithJob = (s: Pick<Script, "get" | "getskilllv">) => !isNovice(s) && s.getskilllv("NV_BASIC") >= 9;
 const FIELD_HUNT = naviTo("Whisperwood", HUNT.woods);
 
 // ---------- Hearthkeeper Bren: save point, fireside heal, the first stop in town (Main 1016) ----------
@@ -78,6 +80,18 @@ export const HEARTHKEEPER_QUESTINFO: QuestInfo[] = [
 const D = "[Drillmaster Kessa]";
 export const drillmaster: NpcScript = async (s) => {
   const lesson = s.isbegin_quest(TQ.LESSON);
+  if (lesson === 1 && startedWithJob(s)) {
+    // 2.7.0: a character made with a first job (rules/jobstart.ts: Basic Training 9, a guild weapon, Job Lv 1) already finished the
+    // Fledgling's training and its calling: the lesson and "A Calling" end here, so the main chain never dead-ends at Job Lv 10
+    if (!canCarryRewards(s, TQ.LESSON)) { s.mes(D, "Your pack's full. Make room for your reward first."); return s.close3(); }
+    s.emotion(ET.BEST);
+    s.completequest(TQ.LESSON);
+    questReward(s, TQ.LESSON);
+    if (s.isbegin_quest(CALLING) === 1) s.completequest(CALLING);
+    s.mes(D, "Basic Training Lv 9, and you already wear a guild's colours. The guild masters did my work for me.",
+      "Consider this lesson learned, and your calling answered. Well done.");
+    return s.close();
+  }
   if (lesson === 1 && !questTasksDone(s, TQ.LESSON)) {
     s.mes(D, "So Bren sent you. Good. Every Job Level a Fledgling earns gives one ^4d4dffskill point^000000.",
       "Open the Skill window (^4d4dffAlt+S^000000) and put them all into ^4d4dffBasic Training^000000: it takes nine.");
@@ -102,7 +116,7 @@ export const drillmaster: NpcScript = async (s) => {
   return s.close();
 };
 export const DRILLMASTER_QUESTINFO: QuestInfo[] = [
-  { icon: QTYPE.QUEST2, color: QMARK.YELLOW, condition: (v) => v.isbegin_quest(TQ.LESSON) === 1 && questTasksDone(v, TQ.LESSON) },
+  { icon: QTYPE.QUEST2, color: QMARK.YELLOW, condition: (v) => v.isbegin_quest(TQ.LESSON) === 1 && (questTasksDone(v, TQ.LESSON) || startedWithJob(v)) },
 ];
 
 // ---------- Pella the cook: "Dinner Bell" (side, talk errand to Garr) ----------

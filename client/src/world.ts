@@ -4,6 +4,7 @@ import { lookOf } from "./themes.ts";
 import { Props, rng } from "./props.ts";
 import { Terrain, TerrainFields, WATER_Y, tickTerrain, vnoise, type Occluder } from "./terrain.ts";
 import { makeFlames, tickTorches } from "./torch.ts";
+import { buildVillage } from "./village.ts";
 import { buildTown, tickTown, townCovered } from "./town.ts";
 
 export { setSeeThrough } from "./props.ts";
@@ -43,7 +44,7 @@ export function buildWorld(m: GameMap) {
   const others: { x: number; y: number; type: PropType; R: number; seed: number }[] = []; // pines, dead trees, stumps, ruins, the stair
   const look = lookOf(m.theme);
   for (const p of m.props) {
-    const h = ((p.x * 73856093) ^ (p.y * 19349663)) >>> 0, u = (h % 997) / 997;
+    const h = ((p.x * 73856093) ^ (p.y * 19349663)) >>> 0, u = (h % 997) / 997; // (house variants use h % 7)
     if (p.type === "rock") { rocks.push({ x: p.x, y: p.y, size: 1.5 + u * 1.0, seed: h }); continue; }
     if (p.type !== "tree") { others.push({ x: p.x, y: p.y, type: p.type, R: 0.9 + u * 0.8, seed: h }); continue; }
     // canopy radius: young trees, ordinary ones and a few big old ones (a canopy is ~2-3x a character's height wide)
@@ -66,7 +67,7 @@ export function buildWorld(m: GameMap) {
   const occ: Occluder[] = [];
   for (const t of trees) occ.push({ x: t.x, y: t.y, r: t.R * 0.95, k: 0.32 }, { x: t.x, y: t.y, r: 0.42, k: 0.4 });
   for (const k of rocks) occ.push({ x: k.x, y: k.y, r: k.size * 0.42, k: 0.55 });
-  for (const o of others) if (o.type === "pine") occ.push({ x: o.x, y: o.y, r: o.R * 0.8, k: 0.3 }); else if (o.type === "ruin" || o.type === "stalagmite") occ.push({ x: o.x, y: o.y, r: 0.6, k: 0.4 });
+  for (const o of others) if (o.type === "pine") occ.push({ x: o.x, y: o.y, r: o.R * 0.8, k: 0.3 }); else if (o.type === "ruin" || o.type === "stalagmite") occ.push({ x: o.x, y: o.y, r: 0.6, k: 0.4 }); else if (o.type === "house") occ.push({ x: o.x, y: o.y, r: 2.0, k: 0.3 });
   // W01 r2 town: contact shade along the foot of every building
   if (m.town) for (const b of m.town.buildings) for (let y = b.y0; y <= b.y1; y++) for (let x = b.x0; x <= b.x1; x++)
     if (x === b.x0 || x === b.x1 || y === b.y0 || y === b.y1) occ.push({ x, y, r: 1.0, k: 0.22 });
@@ -144,6 +145,9 @@ export function buildWorld(m: GameMap) {
     else if (o.type === "stair") props.stair(o.x, o.y, z);
     else if (o.type === "stalagmite") props.stalagmite(o.x, o.y, z, o.seed);
   }
+  const VILLAGE = new Set<PropType>(["house", "housebig", "wreck", "fence", "well", "crates", "lamppost", "gravestone", "cauldron"]);
+  const village = others.filter((o) => VILLAGE.has(o.type));
+  if (village.length) group.add(buildVillage(village, hAt, { x: 60, y: 60 })); // 2.7.0 floor 3 (village.ts); the green is F3_CELLS.green
   const cups: { x: number; y: number; z: number }[] = [];
   for (const t of torches) {
     const z = hAt(t.fx, t.fy);

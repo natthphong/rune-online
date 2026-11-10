@@ -93,8 +93,11 @@ export const jobMaster = (m: Master): NpcScript => async (s: Script) => {
     return s.close();
   }
   if (s.get("BaseJob") !== MAPID.Novice) { // BaseJob != Job_Novice
-    if (s.get("BaseJob") === MAPID[m.job]) s.mes(N, `You're already a ${title(m.job)}. Go and prove it in the fields.`);
-    else s.mes(N, "You've already chosen another path. A climber walks one road at a time.");
+    if (s.get("BaseJob") === MAPID[m.job]) {
+      // 2.7.0: a character made with this job (rules/jobstart.ts) holds "A Calling" without ever having changed here: its master vouches for it
+      if (s.isbegin_quest(CALLING) === 1) { s.completequest(CALLING); s.emotion(ET.BEST); s.mes(N, `So the road already found you. Welcome to the guild, ${title(m.job)}.`); }
+      else s.mes(N, `You're already a ${title(m.job)}. Go and prove it in the fields.`);
+    } else s.mes(N, "You've already chosen another path. A climber walks one road at a time.");
     return s.close();
   }
   if (s.basicskillcheck() && s.getskilllv("NV_BASIC") <= 8) { // F_CanChangeJob

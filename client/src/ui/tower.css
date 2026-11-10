@@ -1,0 +1,18 @@
+/* The Tower HUD (ui/tower.ts): a small panel under the minimap in the window skin's navy and cream */
+#tower-hud { position: fixed; top: 166px; right: 42px; z-index: 6; width: 228px; padding: 4px 7px 5px; box-sizing: border-box; pointer-events: none;
+  background: linear-gradient(#3a4a7e, #28356b); border: 1px solid #cfd3e2; border-radius: 2px; box-shadow: 0 0 0 1px #15151c, 0 1px 4px rgba(0, 0, 0, 0.5);
+  color: #f1f1f6; font: 11px/14px Arial, Helvetica, var(--ui-font); text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.7); }
+#tower-hud[hidden] { display: none; }
+#tower-hud.dead { filter: saturate(0.5) brightness(0.9); }
+.tw-title { font-weight: bold; color: #ffe9a6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tw-row { display: flex; align-items: center; gap: 7px; margin-top: 2px; }
+.tw-row[hidden] { display: none; }
+.tw-arrow { flex: none; width: 20px; height: 20px; line-height: 20px; text-align: center; font-size: 17px; color: #ffd45e; transition: transform 0.4s;
+  text-shadow: 0 0 3px #000, 0 0 1px #000; }
+.tw-hint { color: #e3e8f6; }
+.tw-tag { margin-top: 3px; padding: 0 4px; border-radius: 2px; font-weight: bold; letter-spacing: 0.03em; }
+.tw-tag[hidden] { display: none; }
+.tw-tag.dead { background: rgba(0, 0, 0, 0.35); color: #ffb0a0; }
+.tw-tag.ok { background: #2f7d32; color: #eaffd8; text-align: center; box-shadow: inset 0 0 0 1px #8fd47a; }
+/* the quest tracker stays clear of the panel */
+body.has-tower #quest-tracker { top: 222px; }

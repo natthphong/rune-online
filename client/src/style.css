@@ -440,7 +440,7 @@ body.attack-cursor, body.attack-cursor #view { cursor: var(--cursor-attack); }
    gets a gold-and-navy frame, a soft preview stage, a hair-style grid with pager arrows and a larger palette. */
 #create-screen::before { filter: blur(9px) brightness(0.5) saturate(0.85); transform: scale(1.06); }
 #create-screen::after { background: radial-gradient(ellipse 70% 80% at 50% 50%, rgba(255, 226, 170, 0.1), rgba(10, 8, 20, 0.5)); }
-#w-create { width: min(700px, 100%); border-radius: 6px;
+#w-create { width: min(780px, 100%); border-radius: 6px;
   box-shadow: 0 0 0 2px #d9b45a, 0 0 0 3px #5b3f12, 0 0 0 6px #26305f, 0 0 0 7px #8e9fd8, 0 10px 40px 8px rgba(8, 6, 20, 0.6); }
 #w-create .win-title { cursor: inherit; height: 26px; font-size: 13px; letter-spacing: 0.04em; }
 #w-create .win-body { padding: 16px; background: linear-gradient(#f6f7fc, #e9ecf7); }
@@ -457,6 +457,19 @@ body.attack-cursor, body.attack-cursor #view { cursor: var(--cursor-attack); }
 #w-create .btn.on { border-color: #4f66ae; background: linear-gradient(#a8b8e8, #8196d1); color: #fff; text-shadow: 0 1px 0 rgba(36, 48, 100, 0.45); }
 #w-create .btn.on:hover:not(:disabled) { background: linear-gradient(#a8b8e8, #8196d1); color: #fff; }
 .cr-grid { display: grid; grid-template-columns: 262px 1fr; gap: 20px; }
+/* 2.7.0: the job row (Novice + the six first jobs) across the top of Make Character */
+.cr-jobsec { grid-column: 1 / -1; }
+#cr-jobs { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.cr-job { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px 5px; border: 1px solid #b9c3e0; border-radius: 4px; text-align: center;
+  background: linear-gradient(#fdfdff, #eef1fa 55%, #e2e8f6); box-shadow: inset 0 1px 0 #fff; color: #26305f; cursor: pointer; }
+.cr-job b { font: bold 12px/15px var(--win-font); }
+/* 2c: a painted emblem per job; the role line sits under the row (hovered job, else the picked one) */
+.cr-icon { width: 72px; height: 72px; border-radius: 6px; border: 1px solid #5d6aa0; box-shadow: 0 1px 2px rgba(30, 40, 90, .35); object-fit: contain; padding: 3px;
+  background: radial-gradient(circle at 50% 42%, #5a6bb0, #2b3566 78%); }
+.cr-job:not(.on):not(:hover) .cr-icon { filter: saturate(.8) brightness(.96); }
+p.cr-role { margin: 6px 0 0; min-height: 14px; font: 11px/14px var(--win-font); color: #4a5683; text-align: center; }
+.cr-job:hover { border-color: #7084c0; }
+.cr-job.on { border-color: #b88a1e; background: linear-gradient(#fff6d6, #f8e3a3); box-shadow: 0 0 0 2px #f3d27a, 0 0 0 3px #b88a1e; }
 .cr-left { display: grid; grid-template-rows: 1fr auto; gap: 8px; justify-items: center; }
 .cr-stage { position: relative; display: grid; place-items: end center; width: 262px; min-height: 330px; border-radius: 8px; overflow: hidden;
   background: radial-gradient(ellipse 70% 38% at 50% 88%, rgba(255, 233, 170, 0.75), transparent 70%),
@@ -501,7 +514,7 @@ body.attack-cursor, body.attack-cursor #view { cursor: var(--cursor-attack); }
   #sel-info { width: 100%; grid-template-columns: 50px 1fr 38px 1fr; }
   .sel-logo { display: none; }
 }
-@media (max-width: 520px) { .cr-grid { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .cr-grid { grid-template-columns: 1fr; } #cr-jobs { grid-template-columns: repeat(2, 1fr); } }
 
 /* ---------- MVP3: items ---------- */
 .tabs { display: flex; gap: 2px; padding: 4px 6px 0; border-bottom: 1px solid #c9d1e3; }

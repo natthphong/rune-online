@@ -18,7 +18,8 @@ test("boss spit: only beyond melee, within range, in sight, after the cooldown",
   assert.equal(spitDue(s, { ...o, dist: 2 }), false); // melee range: the normal attack
   assert.equal(spitDue(s, { ...o, dist: 3 }), true);
   assert.equal(spitDue(s, { ...o, dist: 9 }), true);
-  assert.equal(spitDue(s, { ...o, dist: 10 }), false);
+  assert.equal(spitDue(s, { ...o, dist: 10 }), true); // 2.7.0: range 9 -> 10
+  assert.equal(spitDue(s, { ...o, dist: 11 }), false);
   assert.equal(spitDue(s, { ...o, dist: undefined }), false); // no target
   assert.equal(spitDue(s, { ...o, clearLine: false }), false); // a wall in between
   assert.equal(spitDue(s, { ...o, readyAt: 10001 }), false); // cooling down
@@ -70,9 +71,9 @@ test("charge: target 4-10 cells away, in sight, after the cooldown", () => {
 
 test("charge cooldown shrinks when enraged; enrage is strictly under the threshold", () => {
   const c = devo.charge!;
-  assert.equal(chargeCooldown(c, 0, false), 9000);
-  assert.equal(chargeCooldown(c, 3000, false), 12000);
-  assert.equal(chargeCooldown(c, 0, true), 4950);
+  assert.equal(chargeCooldown(c, 0, false), 7000); // 2.7.0: 9000 -> 7000
+  assert.equal(chargeCooldown(c, 3000, false), 10000);
+  assert.equal(chargeCooldown(c, 0, true), 3850);
   assert.equal(isEnraged(devo, 100000, 200000), false); // exactly 50 %
   assert.equal(isEnraged(devo, 99999, 200000), true);
   assert.equal(isEnraged(devo, 0, 200000), false);

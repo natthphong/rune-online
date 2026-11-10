@@ -39,7 +39,7 @@ const db = new pg.Pool({ connectionString: process.env.DATABASE_URL ?? env.DATAB
 const token = await login(url, ACCOUNT);
 for (const c of await apiCall<CharacterSummary[]>(url, "GET", "/characters", token)) await apiCall(url, "DELETE", `/characters/${c.id}`, token, { confirmName: c.name });
 const char = await apiCall<CharacterSummary>(url, "POST", "/characters", token, { slot: 0, name: NAME, gender: "M", hair: 0 });
-await db.query(`UPDATE characters SET job = 'Swordman', level = 20, job_level = 20, sp = 400, str = 30, dex = 30, hotkeys = $2::jsonb,
+await db.query(`UPDATE characters SET job = 'Swordman', level = 60, job_level = 20, hp = 9999, sp = 400, str = 30, dex = 30, vit = 80, hotkeys = $2::jsonb,
   hotkeys_seeded = true WHERE id = $1`, [char.id, JSON.stringify([skillHotkey(SKILL_ID.SM_BASH, 5)])]);
 // Basic Training 9 is in every job's tree under its first-job skills (a Swordman got there through it)
 for (const [id, lv] of [[SKILL_ID.NV_BASIC, 9], [SKILL_ID.SM_BASH, 5]]) {
@@ -106,17 +106,24 @@ try {
   // ---- an MVP dies under a still mouse: tooltip + name tag go at once
   const mvp = MOBS.find((m) => m.bossType === "Mvp") ?? fail("no MVP in mobs.json");
   const seen = await page.evaluate(() => [...(window as any).__ro.entities.keys()]);
-  await page.evaluate((mobId) => { const r = (window as any).__ro; r.room.send("devBoss", { op: "spawn", id: "", mobId, x: r.me.x - 4, y: r.me.y }); }, mvp.id);
+  await page.evaluate((mobId) => { const r = (window as any).__ro; r.room.send("devBoss", { op: "spawn", id: "", mobId, x: r.me.x - 12, y: r.me.y }); }, mvp.id); // 12 cells: on screen, at the edge of its sight: since 2.7.0 a boss that sees the bot runs in, and it killed the old Lv 20 bot before the check (a dead sender's dev kill does nothing): the bot is Lv 60 / VIT 80 now
   await page.waitForFunction((b) => [...(window as any).__ro.entities.values()].some((e: any) => e.isMonster && e.boss === 2 && !e.dead && !b.includes(e.id)), seen, { timeout: 10_000 });
   const boss = await page.evaluate((b) => [...(window as any).__ro.entities.values()].find((e: any) => e.isMonster && e.boss === 2 && !e.dead && !b.includes(e.id)).id, seen);
   await page.waitForTimeout(1500);
-  const bp = (await pixelOf(boss)) ?? fail(`no pixel of the MVP ${boss} picks it`);
-  await page.mouse.move(bp.x, bp.y);
-  await page.waitForFunction(() => !document.getElementById("tooltip")!.hidden, undefined, { timeout: 3000 }).catch(() => fail("no tooltip over the MVP"));
+  // 2.7.0: a boss no longer stands where it spawned (it runs in, swings, hops): keep the mouse on it until the tooltip is up
+  let tip = false;
+  for (let i = 0; i < 40 && !tip; i++) {
+    const bp = await pixelOf(boss);
+    if (bp) await page.mouse.move(bp.x, bp.y);
+    await page.waitForTimeout(120);
+    tip = await page.evaluate(() => !document.getElementById("tooltip")!.hidden);
+  }
+  if (!tip) fail("no tooltip over the MVP");
   const tag = () => page.evaluate((id) => { const l = (window as any).__ro.entities.get(id)?.label; return l ? !l.hidden : false; }, boss);
   if (!(await tag())) fail("the MVP has no name tag while alive");
   await page.evaluate((id) => (window as any).__ro.room.send("devBoss", { op: "kill", id }), boss);
-  await page.waitForFunction((id) => (window as any).__ro.entities.get(id)?.dead, boss, { timeout: 5000 });
+  await page.waitForFunction((id) => (window as any).__ro.entities.get(id)?.dead, boss, { timeout: 5000 })
+    .catch(async () => fail(`the MVP did not die: ${await page.evaluate((id) => { const r = (window as any).__ro, e = r.entities.get(id), s = r.room.state.monsters?.get(id); return JSON.stringify({ entity: !!e, dead: e?.dead, hp: s?.hp, maxHp: s?.maxHp, me: { hp: r.me?.hp, dead: r.entities.get(r.room.sessionId)?.dead }, chat: [...document.querySelectorAll("#chat-log > *")].slice(-4).map((n) => n.textContent) }); }, boss)}`));
   await page.waitForTimeout(300); // a few frames, the mouse never moves
   const tipShown = await page.evaluate(() => !document.getElementById("tooltip")!.hidden);
   if (tipShown) fail("the dead MVP's tooltip stayed under the still mouse");

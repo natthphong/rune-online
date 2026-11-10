@@ -94,6 +94,7 @@
     <form class="win" id="w-create">
       <header class="win-title"><span data-i18n="ui.make_character">Make Character</span></header>
       <div class="win-body cr-grid">
+        <section class="cr-sec cr-jobsec"><h3 data-i18n="create.job">Job</h3><div id="cr-jobs"></div></section>
         <div class="cr-left">
           <div class="cr-stage">
             <canvas id="cr-preview" width="240" height="300" title="Click: practice swing" data-i18n-title="ui.click_practice_swing"></canvas>
@@ -110,7 +111,7 @@
             <div id="cr-styles"></div>
           </section>
           <section class="cr-sec"><h3><span data-i18n="create.hair_color">Hair Color</span><span id="cr-hair" class="muted"></span></h3><div id="cr-colors"></div></section>
-          <p class="muted cr-note">Fledgling &middot; 48 status points to spend in game (Alt+A). Gear you equip shows on your character.</p>
+          <p class="muted cr-note" id="cr-note">Fledgling &middot; 48 status points to spend in game (Alt+A). Gear you equip shows on your character.</p>
           <p id="cr-error" class="err"></p>
         </div>
       </div>

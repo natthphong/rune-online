@@ -23,6 +23,9 @@ import { oldLookout } from "./f1/lookout.ts";
 import { CAMP, MASTERS, MASTER_QUESTINFO, jobMaster } from "./f1/jobs.ts";
 import { CRYSTAL1, NPC2, SPOT2 } from "./f2/chapter2.ts";
 import { ascentStair, warpCrystal } from "./f2/ascent.ts";
+import { NPC3, gateToFloor4, sisterOdile, stairToFloor3 } from "./f3/witherwick.ts";
+import { F3_CELLS, F3_MAP } from "../floor3.ts";
+import { F2_STAIR3 } from "../maps.ts";
 import { SENTINEL_QUESTINFO, lamplighterIsolde, sentinelCorwin, sentinelCorwinTouch } from "./f2/lanternrest.ts";
 
 // W01: every row names its map through its SPOT (f1/chapter1.ts), TOWN_SPOT (f1/town.ts) or CAMP (f1/jobs.ts, the guild row).
@@ -58,6 +61,10 @@ export const NPCS: NpcDef[] = [
   // the warp crystals (npc_tomb is the stand-in sprite until a crystal is drawn)
   { id: NPC2.crystal, name: "Warp Crystal", sprite: "npc_tomb", ...SPOT2.crystal, kind: "script", script: warpCrystal("f2") },
   { id: NPC2.crystal1, map: CRYSTAL1.map, name: "Warp Crystal", sprite: "npc_tomb", x: CRYSTAL1.x, y: CRYSTAL1.y, kind: "script", script: warpCrystal("f1") },
+  // 2.7.0 floor 3 (f3/witherwick.ts): the stair up from Lanternrest (opens with floor 2's guardian), the camp's keeper, the gate to floor 4
+  { id: NPC3.stair, map: F2_STAIR3.map, name: "The Stair to Floor 3", sprite: "", x: F2_STAIR3.x, y: F2_STAIR3.y, kind: "script", script: stairToFloor3, trigger: { x: 1, y: 1 } },
+  { id: NPC3.keeper, map: F3_MAP, name: "Sister Odile", sprite: "npc_herbalist", ...F3_CELLS.keeper, kind: "script", script: sisterOdile },
+  { id: NPC3.gate, map: F3_MAP, name: "The Chapel Gate", sprite: "", ...F3_CELLS.gateUp, kind: "script", script: gateToFloor4, trigger: { x: 1, y: 1 } },
   // Hearthmoor (C08): the save point, services and townsfolk
   { id: TOWN_NPC.hearthkeeper, map: TOWN, name: "Hearthkeeper Bren", sprite: "npc_merchant", ...TOWN_SPOT.hearthkeeper, kind: "script", script: hearthkeeper, questinfo: HEARTHKEEPER_QUESTINFO },
   // C08 r1: Hearthmoor's services and townsfolk (f1/town.ts); the shops sell Mira's field stock split by type (rAthena shop NPCs)

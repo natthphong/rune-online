@@ -655,3 +655,33 @@ test("2.5.0 Lamplighter Isolde saves at Lanternrest and heals for a fee; the war
     assert.ok(!NPCS.some((n) => n.map === c.map && n.x === c.x && n.y === c.y), "landing is not an NPC's cell");
   }
 });
+
+// 2.7.0: a character made with a first job (rules/jobstart.ts: Basic Training 9, Job Lv 1) never dead-ends on the Novice chain: Kessa
+// finishes "The Fledgling's Last Lesson" at once and no "A Calling" is handed out; a held "A Calling" is completed by the master of its job.
+test("a character that started with a job: the lesson and the calling end without Job Lv 10 or a job change", async () => {
+  const w = newWorld();
+  w.params.BaseJob = 1; w.params.JobLevel = 1; w.skills = { NV_BASIC: 9 }; w.quests[TQ.LESSON] = 1; // Job_Swordman
+  assert.equal(marks(w)[TOWN_NPC.drillmaster], QTYPE.QUEST2, "a ? over Kessa: lesson open, job already chosen");
+  let log = await talk(w, TOWN_NPC.drillmaster);
+  assert.deepEqual(paid(log), [`completequest ${TQ.LESSON}`, "getexp 1500 0", "set Zeny 500", "getitem Orange Tonic 3"]);
+  assert.ok(!log.some((l) => l.includes(`setquest ${CALLING}`)), "no calling is handed to a character that has a job");
+  // a character that does not have Basic Training 9 yet still gets the old explanation
+  const v = newWorld();
+  v.params.BaseJob = 1; v.params.JobLevel = 1; v.skills = { NV_BASIC: 3 }; v.quests[TQ.LESSON] = 1;
+  log = await talk(v, TOWN_NPC.drillmaster);
+  assert.ok(!paid(log).length && log.some((l) => l.includes("Basic Training Lv ^4d4dff3")));
+  // a held calling (e.g. begun before the job) is completed by the Kessa lesson and by the master of the character's own job
+  const x = newWorld();
+  x.params.BaseJob = 1; x.params.JobLevel = 1; x.skills = { NV_BASIC: 9 }; x.quests[TQ.LESSON] = 1; x.quests[CALLING] = 1;
+  log = await talk(x, TOWN_NPC.drillmaster);
+  assert.ok(log.includes(`completequest ${CALLING}`));
+  const y = newWorld();
+  y.params.BaseJob = 1; y.params.JobLevel = 1; y.skills = { NV_BASIC: 9 }; y.quests[CALLING] = 1;
+  const brannoc = MASTERS.find((m) => m.job === "Swordman")!, ysolde = MASTERS.find((m) => m.job === "Mage")!;
+  log = await talk(y, ysolde.npc, [2]);
+  assert.ok(!log.includes(`completequest ${CALLING}`), "another job's master does not vouch for it");
+  log = await talk(y, brannoc.npc, [2]);
+  assert.deepEqual(paid(log), [`completequest ${CALLING}`]);
+  log = await talk(y, brannoc.npc, [2]);
+  assert.ok(log.some((l) => l.includes("already a Vanguard")), "afterwards it is the plain greeting");
+});

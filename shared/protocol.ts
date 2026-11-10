@@ -77,6 +77,24 @@ export type BossSplitEvent = { id: string; text: string; /** a client locale key
 /** A boss's charge / headbutt telegraph (Msg.bossCharge): `kind` "charge" = the lane from the boss to cell (ex, ey) is shown for `windMs`, then
  *  the boss dashes it in `dashMs`; "head" = a rear-back before a headbutt (ex, ey = the boss's own cell). */
 export type BossChargeEvent = { id: string; kind: "charge" | "head"; ex: number; ey: number; windMs: number; dashMs: number };
+/** 2.7.0 boss feel: a telegraphed area move (shared/rules/bossmoves.ts `area` rows). The ground warning is shown for `ms`, then the
+ *  impact comes as Msg.bossImpact (the damage as ordinary Msg.hit). Shapes, in cells:
+ *    "circle"  centre (x, y), radius r;
+ *    "line"    from (x, y) to (ex, ey), half-width r;
+ *    "sweep"   the whole disc centre (x, y) radius r EXCEPT the `safe` circles (the goat-demon's ultimate: stand in a safe circle).
+ *  `move` names the move (the client picks FX / sound by it), `leap` = the boss jumps from where it stands to (x, y) during the wind-up. */
+export type BossShape = "circle" | "line" | "sweep";
+export type BossTeleEvent = { id: string; move: string; shape: BossShape; x: number; y: number; r: number; ex?: number; ey?: number; ms: number; safe?: { x: number; y: number; r: number }[]; leap?: boolean };
+/** The impact of a telegraphed move (same geometry as its BossTeleEvent): the client's burst, screen shake and hit-stop. */
+export type BossImpactEvent = { id: string; move: string; shape: BossShape; x: number; y: number; r: number; ex?: number; ey?: number; safe?: { x: number; y: number; r: number }[] };
+/** A boss noticed a player (aggro on sight): it turns on `to` and runs in. `enrage` = the same cue when it enrages. */
+export type BossAggroEvent = { id: string; to: string; enrage?: boolean };
+/** A boss repositions: a quick hop / sidestep from its cell to (x, y) in `ms` (the state patch moves it; this is the dust + arc). */
+export type BossHopEvent = { id: string; x: number; y: number; ms: number };
+/** Tower rule (shared/tower.ts, server/src/tower.ts), to every player on a floor's guardian map, on join and when it changes (and every few
+ *  seconds while alive): where the floor guardian is relative to the receiver. `dir` 0-7 like the facing directions (0 = south, clockwise),
+ *  `dist` cells (Chebyshev); `alive` false = defeated (respawn at `respawnAt`, epoch ms); `cleared` = this character has the floor's unlock. */
+export type TowerEvent = { floor: number; boss: string; alive: boolean; dir: number; dist: number; cleared: boolean; respawnAt?: number; x?: number; y?: number };
 /** What a charge / headbutt did to `to` (Msg.bossSlam; the damage comes as an ordinary Msg.hit): the impact over the victim, who is
  *  thrown to cell (kx, ky) (the state patch moves them there too) and stunned for `stunMs`. */
 export type BossSlamEvent = { from: string; to: string; kind: "charge" | "head"; kx: number; ky: number; stunMs: number };
@@ -87,7 +105,8 @@ export type MvpRewardEvent = { boss: string; exp: number; itemId: number; floor:
 export type AnnounceEvent = { text: string };
 // DEV ONLY: "hurt" = the sender deals `dmg` (default: all HP but 1) to monster `id`; "kill" = a killing blow from the sender;
 // "spawn" = a boss_monster line of `mobId` at (x, y) (respawn 15-20 s, id is ignored); "remove" = that test line and its slaves / tomb.
-export type DevBossMsg = { op: "hurt" | "kill" | "spawn" | "remove"; id: string; dmg?: number; mobId?: number; x?: number; y?: number };
+// 2.7.0: "stat" = a notice with the boss's fight numbers (longest idle gap, moves used); "move" = force the move named `move` now.
+export type DevBossMsg = { op: "hurt" | "kill" | "spawn" | "remove" | "stat" | "move" | "tower" | "var"; move?: string; id: string; dmg?: number; mobId?: number; x?: number; y?: number };
 // ZC_ITEMCOMPOSITION_LIST (clif_use_card): the inventory uids the card `card` can be compounded into (only sent when there is one).
 export type CardListEvent = { card: number; targets: number[] };
 // ZC_ACK_ITEMCOMPOSITION (clif_insert_card): the result of a compound (result 0 = success, 1 = failure); the inv snapshot follows on success.
@@ -273,6 +292,11 @@ export const Msg = {
   bossSplit: "bossSplit", // server -> area: BossSplitEvent (a boss splits into slaves at an HP threshold)
   bossCharge: "bossCharge", // server -> area: BossChargeEvent (Devo's charge telegraph / headbutt wind-up)
   bossSlam: "bossSlam", // server -> area: BossSlamEvent (the impact of a charge / headbutt on a player)
+  bossTele: "bossTele", // server -> area: BossTeleEvent (a telegraphed area move's ground warning)
+  bossImpact: "bossImpact", // server -> area: BossImpactEvent (its impact)
+  bossAggro: "bossAggro", // server -> area: BossAggroEvent (noticed a player / enraged)
+  bossHop: "bossHop", // server -> area: BossHopEvent (a reposition hop)
+  tower: "tower", // server -> owner: TowerEvent (the floor guardian's direction hint and the floor's clear state)
   announce: "announce", // server -> every player online: AnnounceEvent (intif_broadcast, e.g. a rare MVP prize)
   devBoss: "devBoss", // client -> server, DEV ONLY (NODE_ENV != production): DevBossMsg, the boss bot's GM shortcut
   // status changes (shared/rules/status_change.ts, server/src/status.ts)

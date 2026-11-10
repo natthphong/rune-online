@@ -1,6 +1,8 @@
 import * as THREE from "three";
+import { spawn as pfx } from "./pixelFx.ts";
 
-// World-space effects: level-up light pillar, target/hover rings, click marker, hit sparks.
+// World-space effects: level-up light pillar, target/hover rings, click marker, hit sparks. PixelFX sheets (pixelFx.ts) are layered on
+// the boss moves' procedural pictures where they help.
 
 function gradientTexture(stops: [number, string][], w = 4, h = 128) {
   const cv = document.createElement("canvas");
@@ -85,7 +87,7 @@ const IMPACT = { hit: "#ff8ad2", crit: "#ffd04a", hurt: "#ff7a52" } as const;
 export type ImpactKind = keyof typeof IMPACT;
 const IMPACT_LIFE = 0.32; // s
 
-type Burst = { group: THREE.Group; t0: number; anchor: THREE.Vector3; life: number; update: (t: number) => void };
+type Burst = { group: THREE.Group; t0: number; anchor: THREE.Vector3; life: number; update: (t: number) => void; alive?: () => boolean };
 
 export class Fx {
   private bursts: Burst[] = [];
@@ -298,8 +300,9 @@ export class Fx {
     });
   }
 
-  /** Where a glob lands: a flat green puddle spreading out and fading, and droplets thrown up and falling. */
+  /** Where a glob lands: a flat green puddle spreading out and fading, and droplets thrown up and falling (+ PixelFX's acid splash). */
   splat(at: THREE.Vector3) {
+    pfx("acid", at, { scale: 0.75, flip: Math.random() < 0.5 });
     const group = new THREE.Group();
     const puddle = new THREE.Mesh(new THREE.CircleGeometry(0.5, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: this.glob(), transparent: true, depthWrite: false }));
     puddle.position.y = 0.05;
@@ -450,6 +453,8 @@ export class Fx {
 
   /** The impact of a charge / headbutt (Msg.bossSlam): a shock ring and dust thrown out along (dx, dz), the victim's side. */
   slam(at: THREE.Vector3, dx: number, dz: number) {
+    pfx("blunt", at, { scale: 1.6, yOffset: 0.7, center: true, onTop: true, flip: dx < 0 });
+    pfx("landing", at, { scale: 0.8 });
     const group = new THREE.Group();
     const ring = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), additive(ringTexture("rgba(255,170,90,0.95)")));
     ring.position.y = 0.06;
@@ -478,6 +483,7 @@ export class Fx {
 
   /** A boss cue that is not the jelly burst (Msg.bossSplit kind): "stomp" = a ring of dust (the kids arrive), "roar" = a red double ring. */
   cue(anchor: THREE.Vector3, kind: "stomp" | "roar") {
+    if (kind === "stomp") pfx("slam", anchor, { scale: 0.55 });
     const group = new THREE.Group(), col = kind === "roar" ? "rgba(255,60,40,0.95)" : "rgba(230,190,120,0.95)";
     const rings = [0, 0.18].map(() => {
       const r = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), additive(ringTexture(col)));
@@ -504,6 +510,77 @@ export class Fx {
     });
   }
 
+  /** Our own "!" (drawn once per colour): a boss noticed someone (Msg.bossAggro). */
+  private bangTex = new Map<string, THREE.CanvasTexture>();
+  private bang(col: string) {
+    let t = this.bangTex.get(col);
+    if (t) return t;
+    const c = document.createElement("canvas");
+    c.width = 64; c.height = 128;
+    const g = c.getContext("2d")!;
+    g.font = "900 112px Georgia, 'Times New Roman', serif";
+    g.textAlign = "center"; g.textBaseline = "middle"; g.lineJoin = "round";
+    g.lineWidth = 14; g.strokeStyle = "#1a0400"; g.strokeText("!", 32, 68);
+    g.fillStyle = col; g.fillText("!", 32, 68);
+    g.lineWidth = 3; g.strokeStyle = "#fff4c0"; g.strokeText("!", 32, 68);
+    t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    this.bangTex.set(col, t);
+    return t;
+  }
+  /** A "!" popping over a unit's head (anchor = its feet, read every frame; `top` = head height), bigger and red for an enrage. */
+  alert(anchor: THREE.Vector3, top: number, big = false) {
+    const group = new THREE.Group();
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.bang(big ? "#ff3a2a" : "#ffcf3a"), transparent: true, depthTest: false, depthWrite: false }));
+    s.renderOrder = 20;
+    group.add(s);
+    this.scene.add(group);
+    const k = big ? 1.6 : 1;
+    this.bursts.push({
+      group, t0: performance.now(), anchor, life: 1.3,
+      update: (t) => {
+        const pop = t < 0.12 ? 0.3 + (t / 0.12) * 1.1 : t < 0.24 ? 1.4 - ((t - 0.12) / 0.12) * 0.4 : 1;
+        const wob = t < 0.6 ? Math.sin(t * 40) * 0.08 * (1 - t / 0.6) : 0;
+        s.scale.set(0.55 * k * pop, 1.1 * k * pop, 1);
+        (s.material as THREE.SpriteMaterial).rotation = wob;
+        s.position.y = top + 0.75 * k + Math.min(t, 0.3) * 0.6;
+        (s.material as THREE.SpriteMaterial).opacity = t < 0.95 ? 1 : Math.max(0, 1 - (t - 0.95) / 0.35);
+      },
+    });
+  }
+
+  /** An enraged boss's red aura: a pulsing ground ring, a low red column and embers rising, until `alive()` turns false. */
+  aura(anchor: THREE.Vector3, alive: () => boolean, size = 1.6) {
+    const group = new THREE.Group();
+    const ring = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), additive(ringTexture("rgba(255,40,20,0.95)")));
+    ring.position.y = 0.06;
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.6 * size, 0.75 * size, 2.6 * size, 20, 1, true),
+      additive(gradientTexture([[0, "rgba(255,40,20,0.7)"], [0.6, "rgba(255,80,30,0.18)"], [1, "rgba(255,80,30,0)"]])));
+    col.position.y = 1.3 * size;
+    const n = 36, pos = new Float32Array(n * 3), seeds = Array.from({ length: n }, () => [Math.random() * Math.PI * 2, (0.4 + Math.random() * 0.6) * size, Math.random()]);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    const embers = new THREE.Points(geo, new THREE.PointsMaterial({ color: "#ff5a2a", size: 0.14, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    group.add(ring, col, embers);
+    this.scene.add(group);
+    this.bursts.push({
+      group, t0: performance.now(), anchor, life: Infinity, alive,
+      update: (t) => {
+        const p = 0.5 + 0.5 * Math.sin(t * 6);
+        const r = size * (2.1 + 0.25 * p);
+        ring.scale.set(r, r, r);
+        (ring.material as THREE.MeshBasicMaterial).opacity = Math.min(1, t * 3) * (0.55 + 0.4 * p);
+        (col.material as THREE.MeshBasicMaterial).opacity = Math.min(1, t * 3) * (0.35 + 0.25 * p);
+        col.rotation.y += 0.03;
+        seeds.forEach(([a, rad, off], i) => {
+          const h = ((t * 1.3 + off * 3) % 3) * size;
+          pos[i * 3] = Math.cos(a + t) * rad; pos[i * 3 + 1] = h; pos[i * 3 + 2] = Math.sin(a + t) * rad;
+        });
+        geo.attributes.position.needsUpdate = true;
+      },
+    });
+  }
+
   markClick(at: THREE.Vector3) {
     this.click.position.copy(at).setY(at.y + 0.04);
     this.click.visible = true;
@@ -513,7 +590,7 @@ export class Fx {
   update(now: number) {
     for (let i = this.bursts.length - 1; i >= 0; i--) {
       const b = this.bursts[i], t = (now - b.t0) / 1000;
-      if (t > b.life) {
+      if (t > b.life || (b.alive && !b.alive())) {
         this.scene.remove(b.group);
         b.group.traverse((o) => {
           if (o instanceof THREE.Mesh || o instanceof THREE.Points) { o.geometry.dispose(); (o.material as THREE.Material).dispose(); }

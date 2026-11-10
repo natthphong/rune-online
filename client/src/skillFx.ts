@@ -1,9 +1,19 @@
 import * as THREE from "three";
+import { spawn as pfx } from "./pixelFx.ts";
 
 // Skill presentation, all our own art (procedural canvas textures): the casting circle under a caster, the cast bar over it
 // (clif_skillcasting: a bar that fills over the cast time), the skill's name shouted over the caster when it goes off, and one
 // small effect per kind of skill — bolts falling on the target (the classic client drops its bolts from the sky), a ring of
 // fire / arrows bursting on the ground, a rising column of light for a heal, a streak for arrows, a flash for strikes.
+// PixelFX sheets (MIT, pixelFx.ts) are layered on top: an element burst where bolts land / a ground skill goes off, a slash arc on
+// weapon strikes, an impact where arrows land, the heal sparkle.
+
+/** The PixelFX sheet of an element's burst and its natural scale. */
+const ELE_SHEET: Record<string, [string, number, string?]> = {
+  Fire: ["fireburst", 0.42], Water: ["frost", 0.38], Wind: ["zap", 0.6], Earth: ["spike", 0.34], Holy: ["holy", 0.45], Ghost: ["arcane", 0.42],
+  Poison: ["acid", 0.6], Dark: ["darkboom", 0.3], Undead: ["darkboom", 0.3, "#d0ffb8"], Neutral: ["arcane", 0.4, "#ffffff"],
+};
+const eleSheet = (ele: string | undefined) => ELE_SHEET[ele ?? "Neutral"] ?? ELE_SHEET.Neutral;
 
 const ELE_HEX: Record<string, string> = {
   Fire: "#ff7a2a", Water: "#7fd2ff", Wind: "#ffe95a", Earth: "#c9a061", Ghost: "#c9a8ff", Holy: "#fff4b0", Poison: "#9be05a",
@@ -101,6 +111,12 @@ export class SkillFx {
       group.add(body, flash);
       return { body, flash, dx, dz, t0: i * gap };
     });
+    const [sheet, k, tint] = eleSheet(ele);
+    items.slice(0, 3).forEach((it, i) => { // the first few landings burst (Wind: the first one is a full lightning strike)
+      const p = at.clone().add(new THREE.Vector3(it.dx, 0, it.dz));
+      if (ele === "Wind" && i === 0) pfx("lightning", p, { scale: 0.5, delayMs: it.t0 * 1000 + 120 });
+      else pfx(sheet, p, { scale: k * (i ? 0.75 : 1), tint, delayMs: it.t0 * 1000 + 200, flip: Math.random() < 0.5 });
+    });
     this.push({ group, t0: performance.now(), life: n * gap + 0.6, anchor: at.clone(), update: (t) => {
       for (const it of items) {
         const k = (t - it.t0) / 0.22; // falls in 220 ms
@@ -125,6 +141,15 @@ export class SkillFx {
       group.add(s);
       return { s, x: (Math.random() * 2 - 1) * radius, z: (Math.random() * 2 - 1) * radius, d: Math.random() * 0.25 };
     }) : [];
+    if (arrows) for (const d of darts.slice(0, 5)) pfx("spark", at.clone().add(new THREE.Vector3(d.x, 0.2, d.z)), { scale: 0.32, center: true, delayMs: (d.d + 0.25) * 1000, rotation: Math.PI / 2 });
+    else {
+      const [sheet, k, tint] = eleSheet(ele);
+      pfx(sheet, at, { size: (radius * 2 + 1) * 1.05, tint });
+      if (radius >= 2) for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2 + Math.random(), d = radius * 0.7;
+        pfx(sheet, at.clone().add(new THREE.Vector3(Math.cos(a) * d, 0, Math.sin(a) * d)), { scale: k * 0.7, tint, delayMs: 80 + i * 70, flip: i % 2 === 0 });
+      }
+    }
     const sparks = arrows ? [] : Array.from({ length: 18 }, (_, i) => {
       const s = spr(glowTex, color); s.scale.setScalar(0.35); group.add(s);
       return { s, a: (i / 18) * Math.PI * 2, v: 0.8 + Math.random() * 0.6 };
@@ -149,6 +174,7 @@ export class SkillFx {
 
   /** Heal: a soft column of light with sparkles rising around the unit. */
   heal(anchor: THREE.Vector3) {
+    pfx("heal", new THREE.Vector3(), { scale: 0.85, follow: anchor });
     const group = new THREE.Group();
     const col = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 2.4, 20, 1, true), add(streakTex, "#bfffd0", 0.7));
     col.position.y = 1.2;
@@ -168,6 +194,7 @@ export class SkillFx {
     const items = Array.from({ length: count }, (_, i) => { const s = spr(streakTex, color === "#ffffff" ? "#fff2c8" : color); s.scale.set(0.16, 0.9, 1); group.add(s); return { s, d: i * 0.09 }; });
     const flash = spr(glowTex, color); flash.scale.setScalar(0); group.add(flash);
     const dir = b.clone().sub(a);
+    for (const it of items.slice(0, 3)) pfx("spark", b, { scale: 0.4, center: true, onTop: true, delayMs: (it.d + 0.17) * 1000, flip: dir.x < 0, tint: color === "#ffffff" ? undefined : color });
     this.push({ group, t0: performance.now(), life: 0.6 + count * 0.09, update: (t) => {
       for (const it of items) {
         const k = (t - it.d) / 0.18;
@@ -183,6 +210,12 @@ export class SkillFx {
   /** A strike flash on the target (weapon skills: Crushing Blow, Coin Strike, Venom Edge). */
   strike(at: THREE.Vector3, ele: string | undefined, coin = false) {
     const group = new THREE.Group(), color = coin ? "#ffd75a" : eleColor(ele === "Neutral" ? undefined : ele);
+    const body = at.clone().setY(at.y + 0.75), flip = Math.random() < 0.5;
+    if (coin) { pfx("blunt", body, { scale: 0.75, center: true, flip, tint: "#ffe9a0" }); pfx("spark", body, { scale: 0.5, center: true, delayMs: 40, flip: !flip }); }
+    else if (ele !== "Dark") { // weapon skills: a slash arc (a dark strike is a debuff landing: the old flash only)
+      pfx("slash2", body, { scale: 0.62, center: true, flip, tint: ele && ele !== "Neutral" ? color : undefined });
+      pfx("blunt", body, { scale: 0.55, center: true, delayMs: 60, flip });
+    }
     const core = spr(glowTex, color), ring = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.4).rotateX(-Math.PI / 2), add(ringTex, color));
     ring.position.y = 0.05;
     const chips = Array.from({ length: coin ? 10 : 6 }, () => { const s = spr(glowTex, color); s.scale.setScalar(0.15); group.add(s); return { s, a: Math.random() * Math.PI * 2, v: 0.6 + Math.random() }; });

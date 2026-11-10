@@ -1,6 +1,6 @@
 // Account / character HTTP API client (server/src/api.ts). The session token lives in localStorage so a
 // refresh goes straight back to character select.
-import type { CharacterSummary, LoginResponse } from "../../shared/look.ts";
+import { createRequest, type CharacterSummary, type CreateDraft, type LoginResponse } from "../../shared/look.ts";
 import { SERVER } from "./config.ts";
 
 const TOKEN = "rl.token", USER = "rl.username";
@@ -37,6 +37,6 @@ export const api = {
   login: (username: string, password: string) => call<LoginResponse>("POST", "/login", { username, password }),
   logout: () => call<{ ok: true }>("POST", "/logout").catch(() => ({ ok: true })),
   characters: () => call<CharacterSummary[]>("GET", "/characters"),
-  create: (c: { slot: number; name: string; gender: string; hair: number; style?: number }) => call<CharacterSummary>("POST", "/characters", c),
+  create: (c: CreateDraft) => { const r = createRequest(c); return call<CharacterSummary>(r.method, r.path, r.body); }, // the request the `create` bot also builds
   remove: (id: number, confirmName: string) => call<{ ok: true }>("DELETE", `/characters/${id}`, { confirmName }),
 };

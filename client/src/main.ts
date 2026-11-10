@@ -14,10 +14,11 @@ import { skillFx2 } from "./skillFx2.ts";
 import { findPath, type GameMap } from "../../shared/map.ts";
 import { newMotion, patchMotion, setWalkGoal, stepMotion, walkGoal, type Motion } from "./motion.ts";
 import { FIELD, MAP_INFO, WARPS, buildMap, isMapName, roomOf, type MapName } from "../../shared/maps.ts";
-import { ART_STANDIN } from "../../shared/mobart.ts";
+import { ART_STANDIN, artOf, tintOf, scaleOf } from "../../shared/mobart.ts";
 import { makeDoorGlow, makePortal, tickPortals } from "./portal.ts";
 import { SEAL } from "../../shared/content/f1/stair.ts";
 import { lookOf } from "./themes.ts";
+import { setWeather, tickWeather } from "./weather.ts";
 import { resumeNavi, takeNavi } from "./navi.ts";
 import { autoOn, setAuto } from "./autoplay.ts";
 import { MOB_BY_ID, type JobKey, type Mob, type StatKey } from "../../shared/rules/data.ts";
@@ -28,7 +29,7 @@ import { cardAck, closeShop, getInventory, initItems, openCardList, openShop, se
 import { AnimSprite, drawStill, preloadLook } from "./animSprite.ts";
 import { preloadMap } from "./preload.ts";
 import { buildWorld, heightAt, setSeeThrough, tickWorld } from "./world.ts";
-import { play, setMusicMap } from "./audio.ts";
+import { play, setAmbience, setMusicMap } from "./audio.ts";
 import { SERVER } from "./config.ts";
 import { api, session } from "./api.ts";
 import { initScreens, openLogin, openSelect, show } from "./ui/screens.ts";
@@ -37,7 +38,9 @@ import { Fx } from "./fx.ts";
 import { StatusFx } from "./statusFx.ts";
 import { clearStatusList, setStatusList } from "./ui/statusIcons.ts";
 import { setPopObstacles, spawnPop, updatePops } from "./ui/damage.ts";
-import { bindBoss } from "./ui/boss.ts";
+import { bindBoss, bossLift } from "./ui/boss.ts";
+import { bindTower } from "./ui/tower.ts";
+import { applyShake, clearPixelFx, frozen, initPixelFx, shake, spawn as pfx, updatePixelFx } from "./pixelFx.ts";
 import { applyI18n, bindLangSelects, t as tr } from "./i18n.ts"; // aliased: `t` is a local name in places
 import { banner, drawMinimap, initHud, log, logExpLoss, setMinimapMap, settings, showDeath, tooltip, updateBasicInfo, updateStatusWindow, type Dot, type MeView } from "./ui/hud.ts";
 import { bindDialog, dialogOpen, resetDialog } from "./ui/dialog.ts";
@@ -77,6 +80,7 @@ sun.shadow.camera.far = 120;
 sun.shadow.bias = -0.0008;
 scene.add(sun, sun.target);
 const fx = new Fx(scene);
+initPixelFx(scene, (x, z) => map ? heightAt(map, x, z) : 0); // PixelFX sheets, boss telegraphs, shake / hit-stop (pixelFx.ts)
 const skillFx = new SkillFx(scene); // casting circles and skill effects (skillFx.ts)
 const statusFx = new StatusFx(scene); // what a unit's synced status options (opt1 / opt2) look like: tints, stars, Z's ... (statusFx.ts)
 
@@ -134,6 +138,7 @@ function loadMap(seed: number, name: MapName = FIELD) {
   (scene.background as THREE.Color).set(look.sky);
   (scene.fog as THREE.Fog).color.set(look.fog); (scene.fog as THREE.Fog).near = look.fogNear; (scene.fog as THREE.Fog).far = look.fogFar;
   hemi.color.set(look.hemiSky); hemi.groundColor.set(look.hemiGround); hemi.intensity = look.hemi;
+  setWeather(scene, map.theme === "blight"); setAmbience(map.theme === "blight" ? "ambience_blight" : null);
   sun.color.set(look.sunColor); sun.intensity = look.sun;
   // warp portals (npc/re/warps): a light column on each warp cell of this map (portal.ts); a scripted door (the sealed stair) is
   // drawn by its own prop instead
@@ -181,11 +186,11 @@ const BOSS_SCALE: Record<string, number> = { Boss: 1.45, Mvp: 1.35 };
 
 /** Player look from synced state (empty strings = nothing worn in that slot). */
 const lookOfState = (s: any): Look => ({ gender: s.gender === "F" ? "F" : "M", hair: s.hair, style: s.style ?? 0, outfit: s.outfit || "novice",
-  weapon: s.weapon || null, shield: s.shield || null, headgear: s.headgear || null, garment: s.garment || null });
+  weapon: s.weapon || null, shield: s.shield || null, headgear: s.headgear || null, garment: s.garment || null, job: s.job || undefined });
 
 function addEntity(id: string, s: any, isMonster: boolean, isMe: boolean, isPet = false) {
   const def = isMonster || isPet ? MOB_BY_ID.get(s.mobId) : undefined;
-  const view = def ? new AnimSprite({ body: `mob_${def.id}`, fallback: `mob_${def.id}`, standin: def.id in ART_STANDIN ? `mob_${ART_STANDIN[def.id]}` : undefined, height: (MOB_HEIGHT[def.size] ?? 1.1) * (BOSS_SCALE[def.bossType] ?? 1) * (isPet ? PET_SCALE : 1) })
+  const view = def ? new AnimSprite({ body: `mob_${artOf(def.id)}`, fallback: `mob_${artOf(def.id)}`, standin: def.id in ART_STANDIN ? `mob_${ART_STANDIN[def.id]}` : undefined, tint: tintOf(def.id), height: (MOB_HEIGHT[def.size] ?? 1.1) * (BOSS_SCALE[def.bossType] ?? 1) * scaleOf(def.id) * (isPet ? PET_SCALE : 1) })
     : new AnimSprite({ look: lookOfState(s), height: 1.5 });
   const obj: THREE.Object3D = view.object;
   obj.userData.entityId = id;
@@ -397,7 +402,8 @@ function enterWorld(r: Room) {
   bindPets(r, { entity: (id) => { const e = entities.get(id); return e && { pos: e.pos, name: e.name }; }, camera, fx }); // pet emotions, notices, taming result (pets.ts)
   setPartyMap(mapName);
   bindEmotions(r); // NPC scripts in the world: emotion bubbles and npctalk lines (ui/emotion.ts)
-  bindBoss(r, { entity: (id) => { const e = entities.get(id); return e && { pos: e.pos, name: e.name }; }, me: () => r.sessionId, fx }); // MVP effect, rewards, announcements (ui/boss.ts)
+  bindTower(r); // 2.7.0 floor guardian hint panel (ui/tower.ts)
+  bindBoss(r, { entity: (id) => { const e = entities.get(id); return e && { pos: e.pos, name: e.name, top: e.view.standTop(), dead: e.dead }; }, me: () => r.sessionId, fx }); // MVP effect, rewards, announcements, boss move FX (ui/boss.ts)
   r.onLeave((code: number) => {
     if (leaving) return;
     leaveWorld();
@@ -414,7 +420,7 @@ function leaveWorld() {
   resetDuel(); // the duel ends with the room
   if (leaving) unbindParty(); else resetParty(); // a map change keeps the party list, logout / char select forgets it
   resetPetUi(); resetPets();
-  bindAutoUi(undefined); resetDialog(); resetQuests(); resetEmotions(); resetSkills(); clearSkillOverlays(); clearStatusList();
+  bindAutoUi(undefined); resetDialog(); resetQuests(); resetEmotions(); resetSkills(); clearSkillOverlays(); clearStatusList(); clearPixelFx();
   $("w-options").hidden = true;
   clearEntities();
   clearThings(scene);
@@ -534,6 +540,10 @@ function landHit(m: HitEvent, mine: boolean, onMe: boolean) {
   if (!m.miss) {
     // hit confirmation on the blow frame: a spark where the weapon meets the body, and the target flinches away from it
     fx.impact(contactPoint(to, from), camera, m.crit && to.isMonster ? "crit" : to.isMonster ? "hit" : "hurt");
+    // PixelFX on top (pixelFx.ts): a spark spraying away from the attacker on every landed blow, the crit burst + a tiny shake on a crit of mine / on me
+    if (m.crit) { pfx("crit", hitAt, { scale: 0.5, center: true, onTop: true, flip: side < 0 }); if (mine || onMe) shake(0.09, 150); }
+    else if (to.isMonster) pfx("spark", hitAt, { scale: 0.42, center: true, onTop: true, flip: side < 0, rotation: (Math.random() - 0.5) * 0.6 });
+    else pfx("flash", hitAt, { scale: 0.55, center: true, onTop: true, tint: "#ffb08a", flip: side < 0 });
     to.view.action("hit", m.dmotion / 1000, away);
   }
   if ((from?.isMonster || from?.pet) && !from.dead) from.obj.position.lerp(to.pos, 0.12); // the blow: monsters lunge a little
@@ -902,7 +912,7 @@ function ringAt(ring: THREE.Mesh, e: Entity | undefined) {
 }
 let minimapAt = 0;
 renderer.setAnimationLoop(() => {
-  const dt = clock.getDelta(), t = clock.elapsedTime, now = performance.now();
+  const dt = clock.getDelta(), t = clock.elapsedTime, now = performance.now(), held = frozen(now); // held: a heavy impact's hit-stop
   if (!room) { // login screen: slow orbit over the backdrop world
     cam.yaw += dt * 0.08;
     cam.target.set(32, 1, 32);
@@ -917,13 +927,13 @@ renderer.setAnimationLoop(() => {
     // the sprite moves with e.pos; only an offset of its own (a monster's lunge) eases back
     e.obj.position.x += e.pos.x - lx; e.obj.position.z += e.pos.z - lz;
     e.obj.position.lerp(e.pos, 1 - Math.exp(-dt * 20));
-    e.obj.position.y = e.pos.y;
+    e.obj.position.y = e.pos.y + (e.boss ? bossLift(id, now) : 0); // a boss's leap / hop arc (ui/boss.ts)
     e.speed += ((dt > 0 ? Math.hypot(e.obj.position.x - px, e.obj.position.z - pz) / dt : 0) - e.speed) * Math.min(1, dt * 10);
     // a small tight ellipse right under the drawn feet (the sprite lags e.pos by the easing, so follow obj, not pos)
     e.shadow.position.set(e.obj.position.x, e.pos.y + 0.02, e.obj.position.z);
     e.shadow.scale.setScalar(THREE.MathUtils.clamp(e.view.height / 1.5, 0.6, 2)).multiply(SHADOW_SQUASH);
     if (e.moving) e.view.faceDir(e.dir);
-    e.view.update(dt, cam.yaw, { moving: e.moving && e.speed > 0.3, dead: e.dead, sitting: e.sitting, speed: e.speed });
+    e.view.update(held ? 0 : dt, cam.yaw, { moving: e.moving && e.speed > 0.3, dead: e.dead, sitting: e.sitting, speed: e.speed });
     e.shadow.visible = e.obj.visible && !(e.dead && e.isMonster);
     const isMe = id === room?.sessionId;
     if (isMe) cam.target.lerp(tmp.set(e.pos.x, e.pos.y + 0.6, e.pos.z), 1 - Math.exp(-dt * 8));
@@ -963,11 +973,13 @@ renderer.setAnimationLoop(() => {
   ringAt(fx.hover, hovered && hovered.id !== attackTarget ? hovered : undefined);
   fx.update(now);
   skillFx.update(now);
+  updatePixelFx(held ? 0 : dt, now, camera);
   statusFx.update(now, (id) => { const e = entities.get(id); return e && { sprite: e.obj as THREE.Sprite, at: e.obj.position, top: e.view.standTop(), hidden: !e.obj.visible || e.dead }; });
   updateSkillOverlays(now, (id) => { const e = entities.get(id); return e && tmp.set(e.obj.position.x, e.obj.position.y + e.view.standTop() + 0.15, e.obj.position.z); }, place);
   updateSkillShades(now);
   setSkillOwner(own, me?.job);
   tickWorld(t, camera, renderer.domElement.height);
+  tickWeather(t, cam.target);
   tickPortals(t);
   if (now >= musicCheckAt) { // W03: the boss track while a living MVP is near (within 16 cells), the map's own track otherwise
     musicCheckAt = now + 1000;
@@ -994,6 +1006,7 @@ renderer.setAnimationLoop(() => {
     }
   }
   placeCamera();
+  applyShake(camera, now); // after the controller placed it, so the two never fight
   const mine = room ? entities.get(room.sessionId) : undefined;
   const fight = fightUnits(now);
   const seeUnits = fight.slice(0, 3).map((e) => ({ at: e.obj.position, height: e.view.height }));

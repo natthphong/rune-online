@@ -1,5 +1,8 @@
 // Out-of-game screens, laid out like the original client: Login -> Select Character (3 slots x 3 pages) -> Make Character.
-import { GENDERS, GENDER_LABEL, HAIR_COLORS, HAIR_LABEL, HAIR_STYLES, MAX_SLOTS, NAME_RE, USERNAME_RE, outfitOf, type CharacterSummary, type Gender, type Look } from "../../../shared/look.ts";
+import { GENDERS, GENDER_LABEL, HAIR_COLORS, HAIR_LABEL, HAIR_STYLES, MAX_SLOTS, NAME_RE, START_JOBS, USERNAME_RE, outfitOf, type CharacterSummary, type Gender, type Look, type StartJob } from "../../../shared/look.ts";
+import { jobStart } from "../../../shared/rules/jobstart.ts";
+import { statPointsAt } from "../../../shared/rules/exp.ts";
+import { SKILLS, SKILL_ID } from "../../../shared/rules/skill.ts";
 import { JOBS, type JobKey } from "../../../shared/rules/data.ts";
 import { MAP_INFO, type MapName } from "../../../shared/maps.ts";
 import { ApiError, api, session } from "../api.ts";
@@ -16,7 +19,7 @@ export function show(id: ScreenId) {
   document.body.dataset.screen = id ?? "game";
 }
 
-const lookOf = (c: CharacterSummary): Look => c.look ?? { gender: c.gender, hair: c.hair, outfit: outfitOf(c.job) };
+const lookOf = (c: CharacterSummary): Look => ({ ...(c.look ?? { gender: c.gender, hair: c.hair, outfit: outfitOf(c.job) }), job: c.job });
 
 type Hooks = { onStart: (c: CharacterSummary) => Promise<void> };
 let hooks: Hooks;
@@ -91,8 +94,7 @@ function bodyOf(look: Look) {
   let b = bodies.get(key);
   if (!b) {
     const comp = new Composer(PC), entry = { comp, ready: false, loaded: Promise.resolve() as Promise<unknown> };
-    entry.loaded = comp.load(`pc_${look.gender}_${look.outfit}`, HAIR_COLORS[look.hair] ?? HAIR_COLORS[0],
-      layersOf(look).map((l) => l.key), undefined, layersOf(look).some((l) => l.slot === "hair")).then(() => { entry.ready = true; });
+    entry.loaded = comp.loadLook(look).then(() => { entry.ready = true; }); // the world's compositor (layered bodies included)
     bodies.set(key, (b = entry));
   }
   return b;
@@ -260,12 +262,12 @@ async function confirmDelete(ev: Event) {
 }
 
 // ---------------- create ----------------
-let draft: { slot: number; gender: Gender; hair: number; style: number } = { slot: 0, gender: "M", hair: 0, style: 0 };
+let draft: { slot: number; gender: Gender; hair: number; style: number; job: StartJob } = { slot: 0, gender: "M", hair: 0, style: 0, job: "Novice" };
 let live: LivePreview | undefined;
 const pick = <T,>(list: readonly T[]) => list[Math.floor(Math.random() * list.length)];
 
 function openCreate(slot: number) {
-  draft = { slot, gender: pick(GENDERS), hair: Math.floor(Math.random() * HAIR_COLORS.length), style: Math.floor(Math.random() * HAIR_STYLES.length) };
+  draft = { slot, gender: pick(GENDERS), hair: Math.floor(Math.random() * HAIR_COLORS.length), style: Math.floor(Math.random() * HAIR_STYLES.length), job: "Novice" };
   show("create-screen");
   play("sfx", "ui_open", 0.6);
   $<HTMLInputElement>("cr-name").value = "";
@@ -278,8 +280,28 @@ function openCreate(slot: number) {
   $<HTMLInputElement>("cr-name").focus();
 }
 
-const styleLook = (style: number): Look => ({ gender: draft.gender, hair: draft.hair, style, outfit: outfitOf("Novice"), weapon: "blade" });
+const styleLook = (style: number): Look => ({ gender: draft.gender, hair: draft.hair, style, outfit: outfitOf(draft.job), weapon: "blade", job: draft.job });
+/** The job cards' role line (static keys: scripts/i18n-check.ts reads them). */
+const ROLE_KEY: Record<StartJob, string> = {
+  Novice: "create.role_novice", Swordman: "create.role_swordman", Archer: "create.role_archer", Mage: "create.role_mage",
+  Acolyte: "create.role_acolyte", Thief: "create.role_thief", Merchant: "create.role_merchant",
+};
+/** "Crushing Blow 3, Flame Bolt 2 ...": what the job starts with (rules/jobstart.ts). */
+const startSkills = (job: StartJob) => (jobStart(job)?.skills ?? []).map(([k, lv]) => `${SKILLS.get(SKILL_ID[k])?.name ?? k} ${lv}`).join(", ");
+function renderJobs() {
+  $("cr-jobs").querySelectorAll("button").forEach((b) => {
+    const job = (b as HTMLElement).dataset.job as StartJob;
+    b.classList.toggle("on", job === draft.job);
+    b.title = jobStart(job) ? t("create.starts", { skills: startSkills(job) }) : "";
+  });
+  showRole();
+  const st = jobStart(draft.job);
+  $("cr-note").textContent = st
+    ? t("create.note_job", { job: JOBS[draft.job as JobKey].name, level: st.level, points: statPointsAt(st.level), skills: startSkills(draft.job), weapon: st.kit[0].item })
+    : t("create.note_novice");
+}
 function renderCreate() {
+  renderJobs();
   $("cr-hair").textContent = HAIR_LABEL[draft.hair];
   $("cr-style-n").textContent = `${draft.style + 1} / ${HAIR_STYLES.length} · ${HAIR_STYLES[draft.style].label}`;
   void live?.show(styleLook(draft.style));
@@ -300,7 +322,29 @@ function renderCreate() {
 }
 const TILE_ROW = 1, TILE_SCALE = 0.8, TILE_FEET = 134;
 function setStyle(i: number) { draft.style = ((i % HAIR_STYLES.length) + HAIR_STYLES.length) % HAIR_STYLES.length; play("sfx", "click", 0.5); renderCreate(); }
+function setJob(job: StartJob) { draft.job = job; play("sfx", "click", 0.5); renderCreate(); }
+/** The one-line role under the icon row: the hovered job's, else the picked one's. */
+function showRole(job: StartJob = draft.job) {
+  const el = document.getElementById("cr-role");
+  if (el) el.textContent = `${JOBS[job as JobKey].name} · ${t(ROLE_KEY[job])}`;
+}
 function buildCreate() {
+  $("cr-jobs").replaceChildren(...START_JOBS.map((job) => {
+    const b = Object.assign(document.createElement("button"), { type: "button", className: "cr-job", onclick: () => setJob(job) });
+    b.dataset.job = job;
+    b.onmouseenter = () => showRole(job); b.onmouseleave = () => showRole();
+    // a painted emblem per job (public/art/jobs); if one is missing, the job's own composited sprite stands in
+    const icon = Object.assign(document.createElement("img"), { className: "cr-icon", alt: "", draggable: false, src: `/art/jobs/${job}.png` });
+    icon.onerror = () => {
+      const cv = Object.assign(document.createElement("canvas"), { className: "cr-icon", width: 72, height: 72 });
+      icon.replaceWith(cv);
+      const look: Look = { gender: "M", hair: 0, style: 0, outfit: outfitOf(job), weapon: "blade", job }, body = bodyOf(look);
+      void body.loaded.then(() => { const f = body.comp.pick(PC.idle, 0); if (f) body.comp.draw(cv.getContext("2d")!, f, 0, false, 0.62, layersOf(look), 36, 96); });
+    };
+    b.append(icon, Object.assign(document.createElement("b"), { textContent: JOBS[job as JobKey].name }));
+    return b;
+  }));
+  if (!document.getElementById("cr-role")) $("cr-jobs").after(Object.assign(document.createElement("p"), { id: "cr-role", className: "cr-role" }));
   $("cr-gender").replaceChildren(...GENDERS.map((g) => Object.assign(document.createElement("button"), { type: "button", className: "btn", textContent: (g === "M" ? "\u2642 " : "\u2640 ") + GENDER_LABEL[g], onclick: () => { draft.gender = g; renderCreate(); } }), ), );
   $("cr-gender").querySelectorAll("button").forEach((b, i) => (b.dataset.g = GENDERS[i]));
   $("cr-colors").replaceChildren(...HAIR_COLORS.map((c, i) => Object.assign(document.createElement("button"), { type: "button", title: HAIR_LABEL[i], onclick: () => { draft.hair = i; renderCreate(); } }) ).map((b, i) => { b.style.setProperty("--c", HAIR_COLORS[i]); return b; }));
@@ -321,7 +365,7 @@ async function submitCreate(ev: Event) {
   const name = $<HTMLInputElement>("cr-name").value.trim();
   if (!NAME_RE.test(name)) { $("cr-error").textContent = t("create.err_name"); play("sfx", "error"); return; }
   try {
-    const c = await api.create({ slot: draft.slot, name, gender: draft.gender, hair: draft.hair, style: draft.style });
+    const c = await api.create({ slot: draft.slot, name, gender: draft.gender, hair: draft.hair, style: draft.style, job: draft.job });
     live?.stop();
     play("sfx", "levelup", 0.6);
     selected = c.slot;
@@ -335,7 +379,7 @@ async function submitCreate(ev: Event) {
 // ---------------- wiring ----------------
 export function initScreens(h: Hooks) {
   hooks = h;
-  onLangChange(() => { setMode(registering); if (!$("select-screen").hidden) renderSelect(); });
+  onLangChange(() => { setMode(registering); if (!$("select-screen").hidden) renderSelect(); if (!$("create-screen").hidden) renderCreate(); });
   $<HTMLFormElement>("login").addEventListener("submit", submitLogin);
   $("btn-mode").addEventListener("click", () => setMode(!registering));
 

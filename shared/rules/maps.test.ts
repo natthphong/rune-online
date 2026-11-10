@@ -59,7 +59,7 @@ test("W03 catacombs: town -> Mire -> the stair -> B1 -> B2 -> B3 and back up, st
     assert.deepEqual([down.x, down.y, down.to], [DUNGEON_STAIRS[DUNGEONS[i]].down!.x, DUNGEON_STAIRS[DUNGEONS[i]].down!.y, { map: DUNGEONS[i + 1], ...DUNGEON_STAIRS[DUNGEONS[i + 1]].upIn }]);
     assert.deepEqual(up.to, { map: DUNGEONS[i], ...DUNGEON_STAIRS[DUNGEONS[i]].downIn });
   }
-  assert.deepEqual(WARPS.filter((w) => w.npc).map((w) => w.npc), ["f1_stair", "f1_ascent"]); // the sealed stair and the 2.5.0 Ascent Stair
+  assert.deepEqual(WARPS.filter((w) => w.npc).map((w) => w.npc), ["f1_stair", "f1_ascent", "f2_stair3"]); // the sealed stair, the 2.5.0 Ascent Stair, 2.7.0 the stair to floor 3
   assert.deepEqual([MIRE_STAIR.x, MIRE_STAIR.y], [FIELD_THEMES[MIRE].stair!.x, FIELD_THEMES[MIRE].stair!.y]);
 });
 test("W03 catacombs: three cave levels, 60-80 cells, chambers on fixed cells, everything reachable from the stair up, the MVP's paved hall", () => {

@@ -21,6 +21,7 @@ export type Look = {
   style?: number; // hair style, index into HAIR_STYLES (absent = 0)
   weapon?: string | null; // attack animation family ("blade"); null = bare hands
   shield?: string | null; headgear?: string | null; garment?: string | null; // gear layer sheet keys
+  job?: string; // rAthena job key: picks a layered body (client/src/animSprite.ts LAYER_JOBS) when one exists
 };
 
 /** Job -> outfit body (`sprites/anim/pc_<G>_<outfit>_<walk|misc|blade|fist>`), like the job's own sprite in the original
@@ -80,6 +81,17 @@ export function visualsOf(worn: { id: number; type: string; subType: string | nu
   return v;
 }
 
+/** The job a new character may start as (Make Character's job cards, POST /api/characters `job`): the Fledgling (the default, the
+ *  old path) or a first job. The skills and the weapon each one starts with are shared/rules/jobstart.ts (server only). */
+export const START_JOBS = ["Novice", "Swordman", "Archer", "Mage", "Acolyte", "Thief", "Merchant"] as const;
+export type StartJob = (typeof START_JOBS)[number];
+export const isStartJob = (j: unknown): j is StartJob => (START_JOBS as readonly unknown[]).includes(j);
+/** The POST /api/characters request of the Make Character screen: the screen and the `create` bot both build it here. */
+export type CreateDraft = { slot: number; name: string; gender: string; hair: number; style?: number; job?: string };
+export const createRequest = (d: CreateDraft) => ({
+  method: "POST" as const, path: "/characters",
+  body: { slot: d.slot, name: d.name, gender: d.gender, hair: d.hair, ...(d.style === undefined ? {} : { style: d.style }), ...(d.job && d.job !== "Novice" ? { job: d.job } : {}) },
+});
 export const MAX_SLOTS = 9; // 3 pages x 3, like the original character select
 export const NAME_RE = /^[\p{L}\p{N}_ ]{2,16}$/u;
 export const USERNAME_RE = /^[a-z0-9_]{4,24}$/;

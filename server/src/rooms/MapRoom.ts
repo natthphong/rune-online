@@ -16,7 +16,7 @@ import { cardTargets, isCard } from "../../../shared/rules/cards.ts";
 import { pickAlbumCard } from "../../../shared/rules/album.ts";
 import { areaReceivers, type SendTarget } from "../area.ts";
 import { distance, walkable, type GameMap } from "../../../shared/map.ts";
-import { FIELD, TOWN_SAVE, buildMap, isMapName, nearestWalkable, warpAt, type MapName, type MapPos } from "../../../shared/maps.ts";
+import { FIELD, MAP_INFO, TOWN_SAVE, buildMap, isMapName, nearestWalkable, warpAt, type MapName, type MapPos } from "../../../shared/maps.ts";
 import { JOBS, MOB_BY_ID, STAT_KEYS, type JobKey, type Mob, type Stats } from "../../../shared/rules/data.ts";
 import { FISTS, HP_REGEN_MS, NATURAL_HEAL_SKILL_INTERVAL, SP_REGEN_MS, hpRegen, hpRegenBlockedByWalk, mobStatus, ownerHp, playerStatus, spRegen, type MobStatus, type Status, type Weapon } from "../../../shared/rules/status.ts";
 import {
@@ -25,6 +25,8 @@ import {
 } from "../../../shared/rules/items.ts";
 import { blocksNaturalRegen } from "../../../shared/rules/weight.ts";
 import { hotkeyList, isRowShift, seedHotkeys } from "../../../shared/rules/hotkey.ts";
+import { jobStart } from "../../../shared/rules/jobstart.ts";
+import { equipSweep } from "../../../shared/rules/equipsweep.ts";
 import { Inventory, writesSettled } from "../inventory.ts";
 import { buyList, sellList, type BuyResult } from "../../../shared/rules/shop.ts";
 import { buyGate, npcCheckNear, sellGate } from "../../../shared/rules/npc.ts";
@@ -72,6 +74,7 @@ import { db } from "../db.ts";
 import { redis } from "../redis.ts";
 import { Timeline } from "../timeline.ts";
 import { BossSystem } from "../boss.ts";
+import { TowerSystem } from "../tower.ts";
 import { StatusSystem } from "../status.ts";
 import { isScKey } from "../../../shared/rules/status_change.ts";
 import { PetSystem } from "../pets.ts";
@@ -301,6 +304,9 @@ export class MapRoom extends Room<{ state: MapState }> {
   skills: SkillSystem = new SkillSystem(this);
   /** Bosses: MVP rewards, tombs, slaves (server/src/boss.ts). */
   boss: BossSystem = new BossSystem(this);
+  /** 2.7.0 the Tower rule on a floor guardian's map (server/src/tower.ts); it reads the room's map when asked. */
+  tower: TowerSystem = new TowerSystem(this);
+  get mapTitle() { return MAP_INFO[this.mapName].title; }
   /** Status changes: sc_data of every unit, timers, effects, skills / cards / monster skills that apply them (server/src/status.ts). */
   status: StatusSystem = new StatusSystem(this);
   /** Pets: catching, eggs, the pet units, hunger, battle / support pets (server/src/pets.ts). */
@@ -901,6 +907,18 @@ export class MapRoom extends Room<{ state: MapState }> {
     if (!row.kit_given) { // first login: novice starter kit, worn
       for (const k of STARTER_KIT) inv.add(k.id, k.amount);
       for (const st of [...inv.items.values()]) if (isEquip(ITEMS.get(st.itemId)!)) inv.equip(st.uid);
+      // 2.7.0: a character created with a first job (api.ts, rules/jobstart.ts) also gets that job's guild weapon, worn like the master's
+      // gift, and what the job can't wear comes off (pc_jobchange's pc_isequip sweep)
+      const start = jobStart(row.job);
+      if (start) {
+        for (const k of start.kit) {
+          const it = itemNamed(k.item)!;
+          inv.add(it.id, k.count);
+          const st = [...inv.items.values()].find((s) => s.itemId === it.id && !s.equip);
+          if (st) inv.equip(st.uid);
+        }
+        for (const uid of equipSweep([...inv.items.values()], job, row.level)) inv.unequip(uid);
+      }
       await inv.persist("UPDATE characters SET kit_given = true WHERE id = $1", [row.id]); // queued after the kit rows
     }
     // the shortcut bar starts populated with what the character owns and can use (rules/hotkey.ts seedHotkeys): once per character,
@@ -1025,6 +1043,7 @@ export class MapRoom extends Room<{ state: MapState }> {
         this.spawnMonster(id);
       }
     }
+    this.tower.start(); // 2.7.0: a floor built for the Tower rule spawns its guardian at a random spot
   }
 
   /**
@@ -1032,7 +1051,9 @@ export class MapRoom extends Room<{ state: MapState }> {
    * centre, else anywhere). No free cell: try again after mob_respawn_time.
    */
   spawnMonster(id: string) {
-    const slot = this.mobSpawns.get(id)!, mobId = slot.sd.mobId, def = MOB_BY_ID.get(mobId)!;
+    const slot = this.mobSpawns.get(id);
+    if (!slot) return; // its spawn line was removed while the respawn timer ran (a test boss, a guardian that rises elsewhere): threw here and took the server down
+    const mobId = slot.sd.mobId, def = MOB_BY_ID.get(mobId)!;
     const cell = mobSpawnCell(this.map, slot.sd, slot.center, rndValue);
     if (!cell) { this.clock.setTimeout(() => this.spawnMonster(id), SPAWN_CONF.mob_respawn_time); return; }
     this.addMonster(id, mobId, cell.x, cell.y);
@@ -1935,6 +1956,7 @@ export class MapRoom extends Room<{ state: MapState }> {
   mobSwung(id: string, m: Monster, b: Brain, def: Mob, now: number) {
     const swingAt = b.nextAttack - b.status.attackDelayMs;
     b.thinkAt = Math.max(b.thinkAt ?? 0, swingAt + def.attackMotion);
+    this.boss.swung(id, swingAt + def.attackMotion); // 2.7.0: the boss's idle watchdog counts the swing as acting
     if (!hasMode(b.mode ?? def.mode, MD.ASSIST) || now - b.lastLink! < MIN_MOBLINKTIME) return;
     b.lastLink = now;
     const here = this.cell(m);
@@ -2052,6 +2074,7 @@ export class MapRoom extends Room<{ state: MapState }> {
       if (!b.target) b.engaged = undefined; // target dropped: unit_set_target(ud, 0)
       this.mobAi(id, m, b, def, now); // its chase is checked on every cell it reaches (nextCell -> mobUpdateChase)
     }
+    this.tower.tick(now); // 2.7.0: the floor guardian's direction hint
     this.boss.tick(now); // bosses re-check their summon skill once a second
     this.pets.tick(now); // pet_ai_sub_hard: follow / fight, and where clients draw the walking pets
     // where clients draw walking units between cells (the cells themselves change in the step events above)

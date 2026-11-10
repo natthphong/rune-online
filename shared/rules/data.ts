@@ -3,6 +3,9 @@ import jobsJson from "../data/jobs.json" with { type: "json" };
 import tablesJson from "../data/tables.json" with { type: "json" };
 import mobsJson from "../data/mobs.json" with { type: "json" };
 
+import { TOWER } from "../tower.ts";
+import { F3_MOBS } from "../floor3.ts";
+
 export type JobKey = keyof typeof jobsJson;
 export type Job = (typeof jobsJson)[JobKey];
 /** The six first jobs (a Novice's choices, the 2nd jobs' base classes). */
@@ -32,7 +35,29 @@ export type ClassKey = MobClass | "All";
 
 export const JOBS = jobsJson as Record<JobKey, Job & { aspdBase: Record<string, number>; bonusStats: ({ level: number } & Partial<Stats>)[] }>;
 export const MOBS: Mob[] = mobsJson;
-export const MOB_BY_ID = new Map(MOBS.map((m) => [m.id, m]));
+// 2.7.0 floor 3's species (shared/floor3.ts F3_MOBS): each is an existing row (modes, motions, non-card drops) under our own id, name and numbers
+/** The Tower's own species (not rAthena rows): in MOB_BY_ID like any monster, kept out of MOBS (the imported roster the card / album / art rules run over). */
+export const TOWER_MOBS: Mob[] = [];
+for (const t of F3_MOBS) {
+  const base = MOBS.find((m) => m.id === t.base);
+  if (!base) continue;
+  const k = t.level / base.level, up = (v: number) => Math.max(1, Math.round(v * k));
+  TOWER_MOBS.push({
+    ...base, id: t.id, name: t.name, level: t.level, hp: t.hp, atk: t.atk, matk: Math.round(t.atk * 0.8), def: t.def, mdef: Math.round(t.def / 2),
+    str: up(base.str), agi: up(base.agi), vit: up(base.vit), int: up(base.int), dex: up(base.dex), luk: up(base.luk),
+    baseExp: t.baseExp, jobExp: t.jobExp, mvpExp: t.mvpExp ?? 0, race: t.race, element: t.element, size: t.size ?? base.size,
+    range: t.range ?? base.range, walkSpeed: t.walkSpeed ?? base.walkSpeed, attackDelay: t.attackDelay ?? base.attackDelay, attackMotion: t.attackMotion ?? base.attackMotion,
+    mode: t.boss === "Mvp" ? base.mode | 0x80000 : base.mode & ~0x80000, // MD_MVP (rules/mode.ts) only on the guardian
+    bossType: t.boss ?? "None", class: t.boss ? "Boss" : "Normal", mvpDrops: t.boss === "Mvp" ? base.mvpDrops : [],
+    drops: base.drops.filter((d) => d.item < 4001 || d.item > 4999), slaves: [], statusSkills: [], // no other species' card, no borrowed mob skills
+  } as Mob);
+}
+export const MOB_BY_ID = new Map([...MOBS, ...TOWER_MOBS].map((m) => [m.id, m]));
+// 2.7.0 the Tower's floor scaling (shared/tower.ts): a floor guardian's HP / ATK / speed come from the tower table, not from its mob_db row
+for (const f of TOWER) {
+  const m = MOB_BY_ID.get(f.guardian);
+  if (m) Object.assign(m, { hp: f.hp, atk: f.atk, attackDelay: f.attackDelay, attackMotion: f.attackMotion, walkSpeed: f.walkSpeed });
+}
 export const TABLES = tablesJson as {
   statpoint: number[];
   attr: Record<string, Record<string, Record<string, number>>>;

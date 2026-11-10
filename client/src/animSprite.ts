@@ -8,7 +8,7 @@
 //   · blade / fist 4-frame attacks
 // Monsters (3 rows: front, side, back): move 4 frames · act [attack wind-up, strike, hurt, dead]
 import * as THREE from "three";
-import { HAIR_COLORS, HAIR_STYLES, type Look } from "../../shared/look.ts";
+import { HAIR_COLORS, HAIR_STYLES, outfitParts, type Look } from "../../shared/look.ts";
 
 /** stride = sheet px a planted foot travels per step in the side-view walk row (slice_grid.py --stride-row) */
 type Meta = { rows: number; cols: number; cellW: number; cellH: number; unit: number; heads?: number[][]; views?: number; stride?: number };
@@ -70,6 +70,24 @@ function shave(base: HTMLImageElement, mask: HTMLImageElement, meta: Meta) {
     const w = CROWN;
     const row = Math.floor(i / meta.cols), x0 = (i % meta.cols) * meta.cellW, y0 = row * meta.cellH;
     o.clearRect(x0 + hx - 1.15 * w, y0 + top - 10, 2.3 * w, (row >= 3 ? 1.05 : 0.84) * w + 10); // seen from behind it is all hair
+    if (row > 1) return;
+    // 2.7.0 (2c): bangs that hung over an eye (the boy's Classic) leave a HOLE in the face when they are shaved: under a parted
+    // style it showed whatever is behind the sprite (on Make Character's pale panel: a "white smear" over the eye). Below the
+    // brows, from the front, the hidden half is mirrored from the other side; what is still open between two painted pixels of a
+    // row (front and 3/4 view) is closed with skin
+    const bx = Math.round(x0 + hx - 0.5 * w), by = Math.round(y0 + top + 0.84 * w), bw = Math.round(w), bh = Math.round(0.5 * w);
+    const im = o.getImageData(bx, by, bw, bh), f = im.data, HOLE = 140, skin = [0xf6, 0xcf, 0xa6], made = new Uint8Array(bw * bh);
+    if (row === 0) for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
+      const a = (y * bw + x) * 4, b = (y * bw + bw - 1 - x) * 4;
+      if (f[a + 3] < HOLE && f[b + 3] >= HOLE && !made[b >> 2]) { f[a] = f[b]; f[a + 1] = f[b + 1]; f[a + 2] = f[b + 2]; f[a + 3] = 255; made[a >> 2] = 1; } // a copy is never copied back
+    }
+    for (let y = 0; y < bh; y++) {
+      let l = 0, r = bw - 1;
+      while (l < bw && f[(y * bw + l) * 4 + 3] < HOLE) l++;
+      while (r > l && f[(y * bw + r) * 4 + 3] < HOLE) r--;
+      for (let x = l + 1; x < r; x++) { const a = (y * bw + x) * 4; if (f[a + 3] < HOLE) { f[a] = skin[0]; f[a + 1] = skin[1]; f[a + 2] = skin[2]; f[a + 3] = 255; } }
+    }
+    o.putImageData(im, bx, by);
   });
   return out;
 }
@@ -151,6 +169,38 @@ function hairdoSheet(style: string, color: string): Promise<Sheet | null> {
       tg.filter = "brightness(0.78) saturate(1.2)"; tg.drawImage(dye(img, mask, color), 0, 0);
       return { img: tone, meta: { rows: m.views, cols: 1, cellW: m.cellW, cellH: m.cellH, unit: m.cellH - 8 }, feet: 4, horizontal: true };
     })().catch(() => null));
+  }
+  return cache.get(ck)!;
+}
+
+// ---------- layered bodies (tools/art/layer_jobs.py -> layer_build.py) ----------
+// One bald base body per gender + an outfit layer per job + the hair (Classic = `lay_<G>_classic_misc`, dyed; any other style =
+// its hairdo strip on the head anchor) + a weapon layer, stacked base -> outfit -> hair -> weapon into the misc sheet
+// (stand / sit / hurt / dead). Walk and attack sheets are not layered yet: those frames use the job's old body sheets.
+/** Job -> layered outfit key (sprites/anim/lay_<G>_<key>_misc + lay_<G>_<key>w_misc for its weapon). */
+export const LAYER_JOBS: Record<string, string> = { Swordman: "swordman", Archer: "archer", Mage: "mage" };
+export type LayerParts = { base: Sheet; outfit: Sheet; hair: Sheet | null; weapon: Sheet | null };
+/** The separate layers of a look (null = this job/gender has no layered art): also the dev page's exploded view. */
+export async function layerParts(look: Look): Promise<LayerParts | null> {
+  const job = look.job ? LAYER_JOBS[look.job] : undefined;
+  if (!job) return null;
+  const g = look.gender, hair = HAIR_COLORS[look.hair] ?? HAIR_COLORS[0];
+  const [base, outfit, classic, weapon] = await Promise.all([animSheet(`lay_${g}_base_misc`), animSheet(`lay_${g}_${job}_misc`),
+    hairdoKey(look) ? null : animSheet(`lay_${g}_classic_misc`, hair), look.weapon ? animSheet(`lay_${g}_${job}w_misc`) : null]);
+  return base && outfit ? { base, outfit, hair: classic, weapon } : null;
+}
+/** The layered misc sheet of a look, composited once per (gender, job, dye, style, armed). */
+function layeredMisc(look: Look): Promise<Sheet | null> {
+  const ck = `lay|${look.gender}|${look.job}|${look.hair}|${hairdoKey(look)}|${!!look.weapon}`;
+  if (!cache.has(ck)) {
+    cache.set(ck, layerParts(look).then((p) => {
+      if (!p) return null;
+      const m = p.base.meta, cv = document.createElement("canvas");
+      cv.width = m.cols * m.cellW; cv.height = m.rows * m.cellH;
+      const g = cv.getContext("2d")!;
+      for (const s of [p.base, p.outfit, p.hair, p.weapon]) if (s) g.drawImage(s.img, 0, 0);
+      return { img: cv, meta: m, feet: 2, horizontal: false };
+    }).catch(() => null));
   }
   return cache.get(ck)!;
 }
@@ -281,6 +331,19 @@ export class Composer {
     return true;
   }
 
+  /** true = the stand/sit/hurt/dead art is layered but this job has no walk/attack body of its own yet (previews stand still). */
+  standOnly = false;
+  /** A player's sheets: the job's body sheets, then its layered misc sheet on top when one exists (world, select, make character). */
+  async loadLook(look: Look) {
+    const misc = layeredMisc(look);
+    const ok = await this.load(`pc_${look.gender}_${look.outfit}`, HAIR_COLORS[look.hair] ?? HAIR_COLORS[0], layersOf(look).map((l) => l.key), undefined, !!hairdoKey(look));
+    const id = this.loadId, lay = await misc;
+    if (!ok || id !== this.loadId) return false;
+    this.standOnly = !!lay && outfitParts(look.outfit).body !== LAYER_JOBS[look.job ?? ""];
+    if (lay) this.sheets.set("misc", lay);
+    return true;
+  }
+
   /** Resolve wanted frames to a loaded sheet, falling back to standing/walking art when a sheet is missing. */
   pick(want: Frames, t: number): { s: Sheet; col: number } | null {
     for (const [name, cols] of [want, this.kind.idle, this.kind.walk]) {
@@ -355,7 +418,7 @@ export class AnimSprite {
   readonly height: number;
 
   /** body = "mob_1002" for monsters; players pass their look instead. height = world height of a standing actor. */
-  constructor(opts: { look?: Look; body?: string; height: number; fallback?: string; standin?: string }) {
+  constructor(opts: { look?: Look; body?: string; height: number; fallback?: string; standin?: string; tint?: number }) {
     this.height = opts.height;
     this.kind = opts.look ? PC : MOB;
     this.comp = new Composer(this.kind);
@@ -367,6 +430,7 @@ export class AnimSprite {
     this.tex.minFilter = THREE.LinearFilter;
     this.object = new THREE.Sprite(flatDepth(new THREE.SpriteMaterial({ map: this.tex, alphaTest: 0.3, transparent: true })));
     this.object.center.set(0.5, FEET / CH);
+    if (opts.tint !== undefined && opts.tint !== 0xffffff) (this.object.material as THREE.SpriteMaterial).color.setHex(opts.tint); // 2.7.0 tower species: base sheets x colour
     this.unitPx = this.kind === PC ? 160 : 120;
     this.worldPerPx = opts.height / this.unitPx;
     this.object.scale.set(CW * this.worldPerPx, CH * this.worldPerPx, 1);
@@ -386,8 +450,7 @@ export class AnimSprite {
     if (key === this.lookKey) return;
     this.lookKey = key;
     this.look = look;
-    const gear = layersOf(look).map((l) => l.key);
-    void this.comp.load(`pc_${look.gender}_${look.outfit}`, HAIR_COLORS[look.hair] ?? HAIR_COLORS[0], gear, undefined, !!hairdoKey(look)).then(() => { this.drawn = ""; });
+    void this.comp.loadLook(look).then(() => { this.drawn = ""; });
   }
 
   face(yaw: number) { this.yaw = yaw; }
@@ -559,7 +622,7 @@ export function layersOf(l: Look) { return [
 ]; }
 async function composerFor(look: Look) {
   const c = new Composer(PC);
-  await c.load(`pc_${look.gender}_${look.outfit}`, HAIR_COLORS[look.hair] ?? HAIR_COLORS[0], layersOf(look).map((l) => l.key), undefined, !!hairdoKey(look));
+  await c.loadLook(look);
   return c;
 }
 function fit(cv: HTMLCanvasElement) {
@@ -581,6 +644,7 @@ export async function drawStill(cv: HTMLCanvasElement, look: Look, row = 0) {
 export class LivePreview {
   private comp?: Composer;
   private look?: Look;
+  private shown?: Look; // the look `comp` was loaded for
   private t0 = performance.now();
   private attackAt = -1e9;
   private raf = 0;
@@ -599,7 +663,7 @@ export class LivePreview {
     this.look = look;
     const c = await composerFor(look);
     if (this.look !== look) return;
-    this.comp = c;
+    this.comp = c; this.shown = look;
     if (!this.raf) this.raf = requestAnimationFrame(this.tick);
   }
 
@@ -607,18 +671,21 @@ export class LivePreview {
 
   private tick = (now: number) => {
     this.raf = requestAnimationFrame(this.tick);
-    if (!this.comp || !this.look || !this.cv.isConnected || this.cv.offsetParent === null) return;
+    // 2c: draw the look the loaded sheets belong to. While the next pick loads, its hair / gear layers on the previous body
+    // gave a bald or headless flash (the "preview shows the wrong clothes" report)
+    const look = this.shown;
+    if (!this.comp || !look || !this.cv.isConnected || this.cv.offsetParent === null) return;
     const el = (now - this.t0) / 1000;
     const dir = this.dir ?? Math.floor(el / 2.4) % 8; // 0 front, then turning right ... (5..7 = mirrored)
     const rel = dir <= 4 ? (dir * Math.PI) / 4 : -((8 - dir) * Math.PI) / 4;
     const { row, mirror } = facing(rel, 5);
-    const at = (now - this.attackAt) / 1000;
-    const f = at < 0.6 ? this.comp.pick(PC.attack(this.look.weapon ?? "fist"), at / 0.6)
-      : this.walking ? this.comp.pick(PC.walk, (el * 1.5) % 1) : this.comp.pick(PC.idle, 0); // 1.5 walk cycles a second
+    const at = (now - this.attackAt) / 1000, still = this.comp.standOnly; // layered stand art only: no old-outfit walk / swing
+    const f = at < 0.6 && !still ? this.comp.pick(PC.attack(look.weapon ?? "fist"), at / 0.6)
+      : this.walking && !still ?this.comp.pick(PC.walk, (el * 1.5) % 1) : this.comp.pick(PC.idle, 0); // 1.5 walk cycles a second
     const { g, scale, cx, feet } = fit(this.cv);
     g.fillStyle = "rgba(0,0,0,.18)";
     g.beginPath(); g.ellipse(cx, feet - 2, 34 * scale, 10 * scale, 0, 0, Math.PI * 2); g.fill();
-    if (f) this.comp.draw(g, f, row, mirror, scale * 160 / f.s.meta.unit, layersOf(this.look), cx, feet);
+    if (f) this.comp.draw(g, f, row, mirror, scale * 160 / f.s.meta.unit, layersOf(look), cx, feet);
   };
 }
 
@@ -635,4 +702,5 @@ export function preloadMobs(ids: Iterable<number>) {
 export function preloadLook(look: Look) {
   const body = `pc_${look.gender}_${look.outfit}`, hair = HAIR_COLORS[look.hair] ?? HAIR_COLORS[0];
   for (const n of ["walk", "misc", "blade", "fist"]) void animSheet(`${body}_${n}`, hair, !!hairdoKey(look));
+  void layeredMisc(look);
 }

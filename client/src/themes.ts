@@ -62,4 +62,11 @@ LOOKS.ash = {
   grass: [0.56, 0.52, 0.5], dirt: [0.72, 0.6, 0.55], water: [0.6, 0.55, 0.66], leaves: [0.52, 0.46, 0.44],
   ring: ["deadtree", "rock", "rock"], ringCount: 230, decor: 0.3, flowers: 0, mushrooms: 1.5,
 };
-export const lookOf = (theme?: ThemeKey) => LOOKS[theme ?? "town"];
+// 2.7.0 floor 3 (shared/floor3.ts): Witherwick, a plague village at dusk. Dark grey-green fog close in, a sickly yellow-green key
+// light, dead desaturated grass, black-green water; dead trees and crags stand in the ring
+LOOKS.blight = {
+  sky: "#414c34", fog: "#444f35", fogNear: 10, fogFar: 56, hemiSky: "#a9b17c", hemiGround: "#222818", hemi: 1.0, sunColor: "#c6d268", sun: 0.95,
+  grass: [0.3, 0.31, 0.15], dirt: [0.44, 0.4, 0.31], water: [0.18, 0.3, 0.18], leaves: [0.46, 0.5, 0.26],
+  ring: ["deadtree", "deadtree", "rock"], ringCount: 260, decor: 0.35, flowers: 0, mushrooms: 3,
+};
+export const lookOf =(theme?: ThemeKey) => LOOKS[theme ?? "town"];

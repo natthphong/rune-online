@@ -46,8 +46,10 @@ export type TownLayout = {
 /** What stands on a blocked cell (the client draws it; the server only sees `blocked`): broadleaf tree, rock outcrop, conifer,
  *  bare dead tree, tree stump, broken ruin wall / pillar, and the sealed stair of a dungeon entrance (walkable, drawn only).
  *  W03 (caves): a stalagmite (blocks its floor cell), a torch on a wall cell beside the floor (the wall is blocked anyway). */
-export type PropType = "tree" | "rock" | "pine" | "deadtree" | "stump" | "ruin" | "stair" | "stalagmite" | "torch";
-export type ThemeKey = "grass" | "forest" | "highland" | "swamp" | "cave" | "dusk" | "ash"; // dusk / ash: floor 2 (2.5.0)
+export type PropType = "tree" | "rock" | "pine" | "deadtree" | "stump" | "ruin" | "stair" | "stalagmite" | "torch"
+  // 2.7.0 floor 3 (shared/floor3.ts): the ruined village's pieces. A house stands on the middle of a 3x3 blocked footprint; the rest fill one cell.
+  | "house" | "housebig" | "wreck" | "fence" | "well" | "crates" | "lamppost" | "gravestone" | "cauldron";
+export type ThemeKey = "grass" | "forest" | "highland" | "swamp" | "cave" | "dusk" | "ash" | "blight"; // dusk / ash: floor 2 (2.5.0)
 
 function rng(seed: number) {
   let s = seed >>> 0 || 1;

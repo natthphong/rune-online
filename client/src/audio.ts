@@ -9,6 +9,7 @@ export function unlock() { unlocked = true; }
 export function getVolume() { return master; }
 export function setVolume(v: number) {
   master = v;
+  if (amb) amb.el.volume = Math.min(1, v * 0.5);
   try { localStorage.setItem("ro.volume", String(v)); } catch { /* ignore */ }
 }
 
@@ -20,6 +21,18 @@ export function play(_kind: "sfx", name: string, volume = 1) {
   const a = base.cloneNode() as HTMLAudioElement; // overlapping hits need separate elements
   a.volume = Math.min(1, master * volume);
   a.play().catch(() => {}); // missing file: stay silent
+}
+
+// ---- Ambience: one quiet looped bed on the SFX volume (2.7.0 floor 3's wind), client/public/audio/sfx/<name>.mp3 ----
+let amb: { name: string; el: HTMLAudioElement } | undefined;
+export function setAmbience(name: string | null) {
+  if (amb && amb.name !== name) { amb.el.pause(); amb = undefined; }
+  if (!name || amb) return;
+  const el = new Audio(`/audio/sfx/${name}.mp3`);
+  el.loop = true; el.volume = Math.min(1, master * 0.5);
+  amb = { name, el };
+  const go = () => { if (amb?.el === el) el.play().catch(() => { /* blocked until a gesture: retry on the next one */ addEventListener("pointerdown", go, { once: true }); }); };
+  go();
 }
 
 // ---- Music channel (separate from the SFX bus): client/public/audio/music/<scene>.mp3, looped, crossfaded ----

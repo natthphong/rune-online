@@ -17,6 +17,8 @@ import {
   F2_BOSS_HALL, F2_DUN, F2_DUN_STAIRS, F2_DUN_THEME, F2_FIELDS, F2_FIELD1, F2_FIELD2, F2_FIELD_GATE, F2_FIELD_THEMES, F2_GATE_OF, F2_MAP_NAMES, F2_TOWN,
   F2_VAULT_STAIR, F2_VAULT_STAIR_IN, T2_CELLS, T2_GATE_CELLS, T2_IN_CELLS, generateTown2, townLayout2, type F2FieldName,
 } from "./floor2.ts";
+import { F3_ARRIVAL, F3_GATE, F3_HUNT, F3_MAP, generateFloor3 } from "./floor3.ts";
+export { F3_MAP };
 export { F2_BOSS_HALL, F2_DUN, F2_DUN_STAIRS, F2_DUN_THEME, F2_FIELDS, F2_FIELD1, F2_FIELD2, F2_FIELD_THEMES, F2_TOWN, F2_VAULT_STAIR, F2_VAULT_STAIR_IN, T2_CELLS, type F2FieldName };
 
 export const TOWN = "f1_town01";
@@ -34,10 +36,10 @@ export const DUN3 = "f1_dun03";
 export const DUNGEONS = [DUN1, DUN2, DUN3] as const;
 export type DungeonName = (typeof DUNGEONS)[number];
 /** Maps with monsters to hunt (fields and dungeon levels): FIELD_MOBS, habitatOf, the auto-hunt. */
-export const HUNT_MAPS = [...FIELDS, ...DUNGEONS, ...F2_FIELDS, F2_DUN] as const;
-export type HuntMap = FieldName | DungeonName | F2FieldName | typeof F2_DUN;
-export type MapName = typeof TOWN | FieldName | DungeonName | (typeof F2_MAP_NAMES)[number];
-export const MAP_NAMES: MapName[] = [TOWN, ...FIELDS, ...DUNGEONS, ...F2_MAP_NAMES];
+export const HUNT_MAPS = [...FIELDS, ...DUNGEONS, ...F2_FIELDS, F2_DUN, F3_MAP] as const;
+export type HuntMap = FieldName | DungeonName | F2FieldName | typeof F2_DUN | typeof F3_MAP;
+export type MapName = typeof TOWN | FieldName | DungeonName | (typeof F2_MAP_NAMES)[number] | typeof F3_MAP;
+export const MAP_NAMES: MapName[] = [TOWN, ...FIELDS, ...DUNGEONS, ...F2_MAP_NAMES, F3_MAP];
 export const isMapName = (m: unknown): m is MapName => MAP_NAMES.includes(m as MapName);
 export const isField = (m: unknown): m is FieldName => FIELDS.includes(m as FieldName);
 export const isDungeon = (m: unknown): m is DungeonName => DUNGEONS.includes(m as DungeonName);
@@ -60,6 +62,8 @@ export const MAP_INFO: Record<MapName, MapInfo> = {
   [F2_FIELD1]: { title: "Emberlit Terraces", sub: "Field — Lv 30-36", town: false, music: "highland", band: [30, 36] },
   [F2_FIELD2]: { title: "Cinderwatch Heights", sub: "Field — Lv 38-46", town: false, music: "ruins", band: [38, 46] },
   [F2_DUN]: { title: "Emberhollow Vault", sub: "Dungeon — Lv 34-46", town: false, music: "dungeon", band: [34, 46] },
+  // 2.7.0: floor 3 is ONE map, the whole floor (shared/floor3.ts; the Tower rule, shared/tower.ts)
+  [F3_MAP]: { title: "Witherwick", sub: "Floor 3 — The Blighted Shire — Lv 50-58", town: false, music: "ruins", band: [50, 58] },
 };
 /** The Colyseus room of a map: the west field keeps the original room name, so old clients and the test bots join it unchanged. */
 export const roomOf = (m: MapName) => (m === FIELD ? "map" : m);
@@ -159,6 +163,7 @@ const sign2 = (f: F2FieldName) => [MAP_INFO[f].title, MAP_INFO[f].sub.replace("F
 export function buildMap(name: MapName, seed: number): GameMap {
   if (name === TOWN) return generateTown();
   if (name === F2_TOWN) return generateTown2(townLayout2({ W: sign2(F2_FIELD1), E: sign2(F2_FIELD2), S: ["The Ascent Stair", "down to Floor 1"] }));
+  if (name === F3_MAP) return generateFloor3(fieldSeed(name, seed));
   if (name === F2_DUN) return generateDungeon(fieldSeed(name, seed), F2_DUN_THEME);
   if (isDungeon(name)) return generateDungeon(fieldSeed(name, seed), DUNGEON_THEMES[name]);
   if (name === F2_FIELD1 || name === F2_FIELD2) return generateField(fieldSeed(name, seed), F2_FIELD_THEMES[name]);
@@ -236,6 +241,14 @@ const F2_WARPS: Warp[] = [
   { name: "field06_dun04", map: F2_FIELD2, x: F2_VAULT_STAIR.x, y: F2_VAULT_STAIR.y, spanx: 1, spany: 1, to: { map: F2_DUN, ...F2_DUN_STAIRS.upIn } },
   { name: "dun04_field06", map: F2_DUN, ...F2_DUN_STAIRS.up, spanx: 1, spany: 1, to: F2_VAULT_STAIR_IN },
 ];
+/** 2.7.0 the Tower rule: the stair to floor 3 at the top of Lanternrest's north street (the f2_stair3 NPC, shared/content/f3/witherwick.ts:
+ *  a scripted door that opens for climbers whose party felled floor 2's guardian) and where a climber coming back down arrives. */
+export const F2_STAIR3 = { map: F2_TOWN, x: 20, y: 7 } as const;
+export const F2_STAIR3_IN: MapPos = { map: F2_TOWN, x: 20, y: 11 };
+const F3_WARPS: Warp[] = [
+  { name: "town02_field07", map: F2_TOWN, x: F2_STAIR3.x, y: F2_STAIR3.y, spanx: 1, spany: 1, to: { ...F3_ARRIVAL }, npc: "f2_stair3" },
+  { name: "field07_town02", map: F3_MAP, x: F3_GATE.x, y: F3_GATE.y, spanx: 1, spany: 1, to: F2_STAIR3_IN },
+];
 export const WARPS: Warp[] = [
   ...FIELDS.flatMap((f): Warp[] => {
     const side = GATE_OF[f], { gate, arrival } = fieldGate(f), n = f.slice(3); // field01 ...
@@ -255,6 +268,7 @@ export const WARPS: Warp[] = [
     ];
   }),
   ...F2_WARPS,
+  ...F3_WARPS,
 ];
 /** The plain warp whose area holds (x, y) on `map` (npc_touch_areanpc: |x - nd.x| <= spanx, |y - nd.y| <= spany). Scripted
  *  doors (`npc`) are their NPC's business. */
@@ -312,6 +326,7 @@ export const NPC_HOMES: Record<string, { map: MapName; name: string }> = {
   npc_f2_keeper: { map: F2_TOWN, name: "Lamplighter Isolde" }, npc_f2_sentinel: { map: F2_TOWN, name: "Sentinel Corwin" },
   f2_shop: { map: F2_TOWN, name: "Marrow's Provisions" }, f2_crystal: { map: F2_TOWN, name: "Warp Crystal" },
   f1_crystal: { map: TOWN, name: "Warp Crystal" },
+  npc_f3_keeper: { map: F3_MAP, name: "Sister Odile" }, // 2.7.0 floor 3 (shared/content/f3/witherwick.ts)
   npc_job_swordman: { map: TOWN, name: "Vanguard Master Brannoc" }, npc_job_mage: { map: TOWN, name: "Arcanist Master Ysolde" },
   npc_job_archer: { map: TOWN, name: "Fletcher Master Kestrel" }, npc_job_acolyte: { map: TOWN, name: "Cleric Master Aurel" },
   npc_job_merchant: { map: TOWN, name: "Peddler Master Tobin" }, npc_job_thief: { map: TOWN, name: "Prowler Master Sable" },
@@ -333,6 +348,7 @@ export const FIELD_MOBS: Record<HuntMap, { mobs: number[]; hunt: { x: number; y:
   [F2_FIELD1]: { mobs: [1128, 1176, 1033, 1028], hunt: { x: 50, y: 40 } },
   [F2_FIELD2]: { mobs: [1123, 1013, 1391], hunt: { x: 46, y: 40 } },
   [F2_DUN]: { mobs: [1028, 1013, 1123], hunt: { x: 31, y: 34 } },
+  [F3_MAP]: F3_HUNT, // 2.7.0 floor 3: the blighted village's dead (the guardian and the mini-boss are not hunting targets)
 };
 /** The nearest hunting map (fewest warps from `from`) where any of these monsters lives, or undefined. */
 export function habitatOf(mobIds: readonly number[], from: string): HuntMap | undefined {
