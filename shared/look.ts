@@ -1,5 +1,6 @@
-// Character appearance, RO style: a body sprite per gender + job outfit (the job decides the clothes, like the
-// original), a dyeable hairstyle, plus layers for worn gear. Sheets: public/sprites/anim (client/src/animSprite.ts).
+// Character appearance, RO style paper doll: a HEADLESS body per gender + job outfit (the job decides the clothes), a head per
+// hair style (face + dyeable hair), plus sprites for the worn weapon / headgear / garment / shield, all pinned to the body's
+// per-frame anchors (client/src/paperdoll.ts; sprites in public/sprites/pd, built by tools/art/pd_build.py).
 // Server validates creation choices against these lists.
 export const GENDERS = ["M", "F"] as const;
 export type Gender = (typeof GENDERS)[number];
@@ -8,8 +9,8 @@ export const GENDER_LABEL: Record<Gender, string> = { M: "Male", F: "Female" };
 export const HAIR_COLORS = ["#7a4a2a", "#3a2a24", "#f2cf72", "#e0543e", "#ff9ec4", "#5b8ff0", "#59c27a", "#e9e6f2", "#b07ae0"] as const;
 export const HAIR_LABEL = ["Chestnut", "Raven", "Golden", "Crimson", "Blossom", "Azure", "Fern", "Silver", "Violet"] as const;
 
-/** Hair styles (index stored in characters.hairdo). 0 = the hair painted on the body sheets; the others are overlay
- *  strips `sprites/hairdo_<key>.png` (client/src/animSprite.ts) drawn on the head anchor and dyed like the hair. */
+/** Hair styles (index stored in characters.hairdo). Each is a head sprite per gender, `sprites/pd/head_<G>_<key>` (key "" =
+ *  "classic"): the face and the hair are one sprite, dyed through its hair mask. */
 export const HAIR_STYLES = [
   { key: "", label: "Classic" }, { key: "ponytail", label: "Ponytail" }, { key: "twintails", label: "Twin Tails" },
   { key: "long", label: "Long" }, { key: "topknot", label: "Topknot" }, { key: "braid", label: "Braid" },
@@ -19,19 +20,17 @@ export const HAIR_STYLES = [
 export type Look = {
   gender: Gender; hair: number; outfit: string;
   style?: number; // hair style, index into HAIR_STYLES (absent = 0)
-  weapon?: string | null; // attack animation family ("blade"); null = bare hands
+  weapon?: string | null; // weapon sprite key ("sword", "bow", ...: WEAPON_SPRITE); null = bare hands
   shield?: string | null; headgear?: string | null; garment?: string | null; // gear layer sheet keys
-  job?: string; // rAthena job key: picks a layered body (client/src/animSprite.ts LAYER_JOBS) when one exists
+  job?: string; // rAthena job key: picks the body (pdBodyOf)
 };
 
-/** Job -> outfit body (`sprites/anim/pc_<G>_<outfit>_<walk|misc|blade|fist>`), like the job's own sprite in the original
- *  (one body per job class and gender). Only outfits drawn for BOTH genders and all four sheets are listed
- *  (shared/rules/look.test.ts checks the files); every other job wears the Novice outfit until its art exists. */
+/** `Player.outfit` / `Look.outfit`: the public outfit string of a job, `<body>` or `<body>@<hue>[b]` (kept for the synced state and
+ *  the job bots; the client draws from Look.job through pdBodyOf, which shares the tables below). */
 export const JOB_OUTFITS: Record<string, string> = { Swordman: "swordman" };
-export const SHEETS = ["walk", "misc", "blade", "fist"] as const;
 /** 2.5.0: the 2nd jobs and the transcendent line wear their first job's body recoloured until their own art exists: the hue
- *  turns by `OUTFIT_TINT[job]` degrees (clothes only: hair and skin keep their colours, client/src/animSprite.ts tintSheet), and a
- *  transcendent job adds "b" = brighter, more saturated cloth. Written into Look.outfit as `<body>@<hue>[b]`. */
+ *  turns by `OUTFIT_TINT[job]` degrees (cloth only: client/src/paperdoll.ts tintBody; the head is a separate sprite, so no face
+ *  can change colour), and a transcendent job adds "b" = brighter, more saturated cloth. */
 export const OUTFIT_BASE: Record<string, string> = {
   Knight: "Swordman", Crusader: "Swordman", Lord_Knight: "Swordman", Paladin: "Swordman", Swordman_High: "Swordman",
   Wizard: "Mage", Sage: "Mage", High_Wizard: "Mage", Professor: "Mage", Mage_High: "Mage",
@@ -60,10 +59,32 @@ export function outfitParts(outfit: string): { body: string; hue: number; bright
   return m ? { body: m[1], hue: Number(m[2]), bright: m[3] === "b" } : { body: outfit, hue: 0, bright: false };
 }
 
-// equipment -> layer. Weapons by sub type -> attack animation family; armour by item id (only items with a layer sprite).
-const WEAPON_FAMILY: Record<string, string> = {}; // every other weapon uses the one-handed slash until more attack sheets exist
-/** 2.5.0: knuckles and katars are fought with the bare-hand (fist) sheet; every other new weapon type (Whip, Book, Musical, ...) uses the slash. */
+/** PAPER DOLL (client/src/paperdoll.ts): the headless body a job wears. Every first job has its own outfit; a 2nd / transcendent
+ *  job wears its first job's body with the cloth turned by OUTFIT_TINT degrees until it has art of its own. */
+export const PD_BODY: Record<string, string> = {
+  Novice: "novice", Swordman: "swordman", Archer: "archer", Mage: "mage", Acolyte: "acolyte", Thief: "thief", Merchant: "merchant",
+};
+/** Bodies whose art is complete for BOTH genders and has passed tools/art/pd_check.py. shared/rules/paperdoll.test.ts checks every
+ *  file a shipped body needs (and that every starting job is shipped); a job missing here would wear the Fledgling's body. */
+export const PD_SHIPPED: readonly string[] = ["novice", "swordman", "archer", "mage", "acolyte", "thief", "merchant"];
+export function pdBodyOf(job: string): { body: string; hue: number; bright: boolean } {
+  const base = OUTFIT_BASE[job];
+  if (!base) return { body: PD_BODY[job] ?? "novice", hue: 0, bright: false };
+  const plain = TRANS_OF[job] ?? job;
+  return { body: PD_BODY[base] ?? "novice", hue: OUTFIT_TINT[plain] ?? 0, bright: job in TRANS_OF || job.endsWith("_High") };
+}
+
+// equipment -> what is drawn. Weapon: the sprite of its family (`sprites/pd/weapon_<key>`, held on the body's hand anchor; the old
+// sheets only read it as "armed"); an item id may get a sprite of its own in WEAPON_ITEM. Armour by item id.
+const WEAPON_SPRITE: Record<string, string> = {
+  Dagger: "dagger", "1hSword": "sword", "2hSword": "sword", "1hSpear": "sword", "2hSpear": "sword", "1hAxe": "axe", "2hAxe": "axe",
+  Mace: "mace", Staff: "rod", "2hStaff": "rod", Bow: "bow", Book: "mace", Whip: "sword", Musical: "bow",
+};
+const WEAPON_ITEM: Record<number, string> = { 1201: "knife" }; // the Fledgling's Knife
+/** 2.5.0: knuckles and katars are fought with bare hands (no weapon sprite). */
 const BARE_HAND_WEAPONS = new Set(["Knuckle", "Katar"]);
+/** The weapon a starting job holds in the Make Character preview (shared/rules/jobstart.ts kit). */
+export const START_WEAPON: Record<string, string> = { Novice: "knife", Swordman: "sword", Archer: "bow", Mage: "rod", Acolyte: "mace", Thief: "dagger", Merchant: "axe" };
 const GEAR_LAYER: Record<number, { slot: "shield" | "headgear" | "garment"; key: string }> = {
   2101: { slot: "shield", key: "guard" }, // Guard
   2220: { slot: "headgear", key: "hat" }, // Hat
@@ -74,7 +95,7 @@ const GEAR_LAYER: Record<number, { slot: "shield" | "headgear" | "garment"; key:
 export function visualsOf(worn: { id: number; type: string; subType: string | null }[]) {
   const v = { weapon: null as string | null, shield: null as string | null, headgear: null as string | null, garment: null as string | null };
   for (const it of worn) {
-    if (it.type === "Weapon") v.weapon = BARE_HAND_WEAPONS.has(it.subType ?? "") ? null : WEAPON_FAMILY[it.subType ?? ""] ?? "blade";
+    if (it.type === "Weapon") v.weapon = BARE_HAND_WEAPONS.has(it.subType ?? "") ? null : WEAPON_ITEM[it.id] ?? WEAPON_SPRITE[it.subType ?? ""] ?? "sword";
     const g = GEAR_LAYER[it.id];
     if (g) v[g.slot] = g.key;
   }

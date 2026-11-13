@@ -60,5 +60,5 @@ test("character list: a hurt character keeps its saved HP/SP, a never-saved one 
 test("character list: a bare item id is worn at +0, rows of items missing from the data are skipped, the look is still built", () => {
   const s = summarize(row(414, 60), [WAND, COAT, GONE]);
   assert.deepEqual(bars(s), [414, 414, 60, 60]);
-  assert.equal(s.look.weapon, "blade"); // the wand's attack animation family (shared/look.ts visualsOf)
+  assert.equal(s.look.weapon, "rod"); // the wand's weapon sprite (shared/look.ts visualsOf)
 });

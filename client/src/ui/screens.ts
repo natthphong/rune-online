@@ -1,5 +1,5 @@
 // Out-of-game screens, laid out like the original client: Login -> Select Character (3 slots x 3 pages) -> Make Character.
-import { GENDERS, GENDER_LABEL, HAIR_COLORS, HAIR_LABEL, HAIR_STYLES, MAX_SLOTS, NAME_RE, START_JOBS, USERNAME_RE, outfitOf, type CharacterSummary, type Gender, type Look, type StartJob } from "../../../shared/look.ts";
+import { GENDERS, GENDER_LABEL, HAIR_COLORS, HAIR_LABEL, HAIR_STYLES, MAX_SLOTS, NAME_RE, START_JOBS, START_WEAPON, USERNAME_RE, outfitOf, type CharacterSummary, type Gender, type Look, type StartJob } from "../../../shared/look.ts";
 import { jobStart } from "../../../shared/rules/jobstart.ts";
 import { statPointsAt } from "../../../shared/rules/exp.ts";
 import { SKILLS, SKILL_ID } from "../../../shared/rules/skill.ts";
@@ -8,7 +8,8 @@ import { MAP_INFO, type MapName } from "../../../shared/maps.ts";
 import { ApiError, api, session } from "../api.ts";
 import { play, unlock } from "../audio.ts";
 import { onLangChange, t } from "../i18n.ts";
-import { Composer, LivePreview, PC, layersOf } from "../animSprite.ts";
+import { Composer, LivePreview, PC } from "../animSprite.ts";
+import { drawHead } from "../paperdoll.ts";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const SCREENS = ["login-screen", "select-screen", "create-screen"] as const;
@@ -86,8 +87,7 @@ const LEDGER: readonly (readonly string[])[] = [["Name", "STR"], ["Job", "AGI"],
 const LABEL_KEY: Record<string, string> = { Name: "ui.name", Job: "select.job", Map: "select.map" };
 const LEDGER_TIP: Record<string, string> = { "Lv.": "select.tip_level", EXP: "select.tip_exp" };
 
-type Layer = ReturnType<typeof layersOf>[number];
-/** One loaded Composer per look (body + dyed hair + gear layers), kept across re-renders so a click repaints at once. */
+/** One loaded Composer per look (paper doll: body + head + weapon + gear), kept across re-renders so a click repaints at once. */
 const bodies = new Map<string, { comp: Composer; ready: boolean; loaded: Promise<unknown> }>();
 function bodyOf(look: Look) {
   const key = JSON.stringify(look);
@@ -125,19 +125,18 @@ function paintSlot(v: SlotView, sink = 0) {
   if (!b.ready) { void b.loaded.then(() => { if (v.cv.isConnected) paintSlot(v); }); return; }
   const g = v.cv.getContext("2d")!;
   g.clearRect(0, 0, SLOT_W, SLOT_H);
-  const f = b.comp.pick(PC.idle, 0);
+  const f = b.comp.pick(b.comp.kind.idle, 0);
   if (!f) return;
   const m = f.s.meta, scale = PREVIEW_UNIT / m.unit;
   // whole-pixel placement: at 1:1 the cell's left edge (cx - cellW / 2) has to land on a pixel boundary
   const cx = Math.floor(SLOT_W / 2) + (scale === 1 ? (m.cellW % 2) / 2 : 0);
-  const draw = (gg: CanvasRenderingContext2D, layers: Layer[]) => b.comp.draw(gg, f, 0, false, scale, layers, cx, FEET_Y);
+  const draw = (gg: CanvasRenderingContext2D) => b.comp.draw(gg, f, 0, false, scale, cx, FEET_Y);
   groundShadow(g, cx);
-  const layers = layersOf(v.look);
-  if (!sink) { draw(g, layers); return; }
+  if (!sink) { draw(g); return; }
   // legs stay planted; everything above the waist is drawn again 1 px lower over them (a gap-free 2-frame breath)
   const cut = FEET_Y - WAIST;
-  g.save(); g.beginPath(); g.rect(0, cut, SLOT_W, SLOT_H - cut); g.clip(); draw(g, layers); g.restore();
-  g.save(); g.beginPath(); g.rect(0, 0, SLOT_W, cut + sink); g.clip(); g.translate(0, sink); draw(g, layers); g.restore();
+  g.save(); g.beginPath(); g.rect(0, cut, SLOT_W, SLOT_H - cut); g.clip(); draw(g); g.restore();
+  g.save(); g.beginPath(); g.rect(0, 0, SLOT_W, cut + sink); g.clip(); g.translate(0, sink); draw(g); g.restore();
 }
 
 let breathRaf = 0, breath = 0;
@@ -280,7 +279,7 @@ function openCreate(slot: number) {
   $<HTMLInputElement>("cr-name").focus();
 }
 
-const styleLook = (style: number): Look => ({ gender: draft.gender, hair: draft.hair, style, outfit: outfitOf(draft.job), weapon: "blade", job: draft.job });
+const styleLook = (style: number): Look => ({ gender: draft.gender, hair: draft.hair, style, outfit: outfitOf(draft.job), weapon: START_WEAPON[draft.job], job: draft.job });
 /** The job cards' role line (static keys: scripts/i18n-check.ts reads them). */
 const ROLE_KEY: Record<StartJob, string> = {
   Novice: "create.role_novice", Swordman: "create.role_swordman", Archer: "create.role_archer", Mage: "create.role_mage",
@@ -311,16 +310,13 @@ function renderCreate() {
   // cropped from the same Composer the select screen uses
   $("cr-styles").querySelectorAll<HTMLCanvasElement>("canvas").forEach((cv, i) => {
     cv.parentElement!.classList.toggle("on", i === draft.style);
-    const body = bodyOf(styleLook(i));
-    void body.loaded.then(() => {
-      if (!cv.isConnected) return;
-      const f = body.comp.pick(PC.idle, 0), g = cv.getContext("2d")!;
-      g.clearRect(0, 0, cv.width, cv.height);
-      if (f) body.comp.draw(g, f, TILE_ROW, false, TILE_SCALE, layersOf(styleLook(i)), cv.width / 2, TILE_FEET);
-    });
+    {
+      // the tile IS the head sprite of that style (the same file the body wears), not a crop of a composite
+      if (cv.isConnected) void drawHead(cv, draft.gender, i, draft.hair, TILE_ROW, cv.height / 72);
+    }
   });
 }
-const TILE_ROW = 1, TILE_SCALE = 0.8, TILE_FEET = 134;
+const TILE_ROW = 1;
 function setStyle(i: number) { draft.style = ((i % HAIR_STYLES.length) + HAIR_STYLES.length) % HAIR_STYLES.length; play("sfx", "click", 0.5); renderCreate(); }
 function setJob(job: StartJob) { draft.job = job; play("sfx", "click", 0.5); renderCreate(); }
 /** The one-line role under the icon row: the hovered job's, else the picked one's. */
@@ -338,8 +334,8 @@ function buildCreate() {
     icon.onerror = () => {
       const cv = Object.assign(document.createElement("canvas"), { className: "cr-icon", width: 72, height: 72 });
       icon.replaceWith(cv);
-      const look: Look = { gender: "M", hair: 0, style: 0, outfit: outfitOf(job), weapon: "blade", job }, body = bodyOf(look);
-      void body.loaded.then(() => { const f = body.comp.pick(PC.idle, 0); if (f) body.comp.draw(cv.getContext("2d")!, f, 0, false, 0.62, layersOf(look), 36, 96); });
+      const look: Look = { gender: "M", hair: 0, style: 0, outfit: outfitOf(job), weapon: START_WEAPON[job], job }, body = bodyOf(look);
+      void body.loaded.then(() => { const f = body.comp.pick(body.comp.kind.idle, 0); if (f) body.comp.draw(cv.getContext("2d")!, f, 0, false, 0.62, 36, 96); });
     };
     b.append(icon, Object.assign(document.createElement("b"), { textContent: JOBS[job as JobKey].name }));
     return b;

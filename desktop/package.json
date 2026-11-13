@@ -1,7 +1,7 @@
 {
   "name": "runebound-legacy",
   "productName": "Runebound Legacy",
-  "version": "2.7.0",
+  "version": "2.8.0",
   "description": "Runebound Legacy desktop build: the game server + client in one app",
   "private": true,
   "type": "module",

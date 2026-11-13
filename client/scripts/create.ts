@@ -172,7 +172,7 @@ for (const [i, job] of JOBS_RUN.entries()) {
   const sum = (await apiCall<CharacterSummary[]>(url, "GET", "/characters", token)).find((c) => c.id === made.id)!.look;
   const shown = { gender: sum.gender, hair: sum.hair, style: sum.style, outfit: sum.outfit, job: sum.job, weapon: sum.weapon || null, shield: sum.shield || null, headgear: sum.headgear || null, garment: sum.garment || null };
   if (JSON.stringify(shown) !== JSON.stringify(world)) fail(`select look differs from the world's: summary ${JSON.stringify(shown)} vs world ${JSON.stringify(world)}`);
-  if (world.weapon !== "blade" || world.headgear !== "hat" || world.style !== 2 || world.hair !== 3 || world.job !== "Swordman") fail(`look: unexpected world look ${JSON.stringify(world)}`);
+  if (world.weapon !== "sword" || world.headgear !== "hat" || world.style !== 2 || world.hair !== 3 || world.job !== "Swordman") fail(`look: unexpected world look ${JSON.stringify(world)}`);
   say(`OK look: Select Character look == in-world look after Hat + Sword and a relog (${JSON.stringify(world)})`);
   await deleteChar(url, token, made);
   await db.end();

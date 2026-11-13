@@ -1,5 +1,5 @@
 // Screenshots of the layered bodies in real Chrome (playwright-core), 1920x1080:
-//   node scripts/layershots.ts lab [outDir] [pageBase]          client/dev/layers.html -> 02b-layers-exploded.png (base / outfit /
+//   node scripts/layershots.ts lab [outDir] [pageBase]          client/dev/paperdoll.html -> 02b-layers-exploded.png (base / outfit /
 //                                                               hair / weapon + composited) and 02b-hair-outfit-swaps.png (jobs x styles x genders)
 //   node scripts/layershots.ts world [outDir] [pageBase] [url]  a Mage logs in through the page, an Archer and a Swordman bot stand
 //                                                               beside her in town -> 02b-in-world.png (dev schema only: plants jobs)
@@ -15,8 +15,8 @@ const shot = (n: string) => `${dir}/${n}`;
 try {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
   if (mode === "lab") {
-    for (const [q, name] of [["", "02b-layers-exploded.png"], ["?view=swaps", "02b-hair-outfit-swaps.png"]]) {
-      await page.goto(`${page0}/dev/layers.html${q}`);
+    for (const [q, name] of [["?view=exploded", "02b-layers-exploded.png"], ["?view=matrix", "02b-hair-outfit-swaps.png"]]) { // the paper-doll lab (see also scripts/pdshots.ts)
+      await page.goto(`${page0}/dev/paperdoll.html${q}`);
       await page.waitForSelector("body[data-ready='1']", { timeout: 60000 });
       await page.waitForTimeout(500);
       await page.screenshot({ path: shot(name), fullPage: true });
