@@ -76,7 +76,7 @@ test("floor 2 maps: every walkable cell reachable from the gate / stair, NPCs an
   assert.ok(d.open > d.m.w * d.m.h * 0.18 && d.open < d.m.w * d.m.h * 0.45, "a dungeon, not an open field");
 });
 
-test("floor 2 spawns: FIELD_MOBS are the monster lines, every species has a sprite and sits in its band, one mini-boss in the Heights, the boss in the hall", () => {
+test("floor 2 spawns: FIELD_MOBS are the monster lines, every species has a sprite and sits in its band, one mini-boss in the Heights, no boss in the vault (2.9.0: Devo roams the Sunscour Ruins)", () => {
   const text = readFileSync(new URL("../data/spawns.txt", import.meta.url), "utf8");
   for (const f of [F2_FIELD1, F2_FIELD2, F2_DUN] as const) {
     const lines = parseSpawns(text, f, buildMap(f, SEED), (id) => MOB_BY_ID.has(id));
@@ -89,10 +89,7 @@ test("floor 2 spawns: FIELD_MOBS are the monster lines, every species has a spri
     }
     const bosses = lines.filter((s) => s.boss);
     if (f === F2_FIELD2) assert.deepEqual(bosses.map((b) => b.mobId), [1250], "Cinderwarden on the Heights");
-    else if (f === F2_DUN) {
-      assert.equal(bosses.length, 1);
-      assert.deepEqual([bosses[0].mobId, bosses[0].x, bosses[0].y], [3999, F2_BOSS_HALL.x, F2_BOSS_HALL.y], "Devo on its hall cell");
-    } else assert.equal(bosses.length, 0);
+    else assert.equal(bosses.length, 0);
   }
   assert.equal(habitatOf([3999], TOWN), undefined, "a boss is not a navigation habitat");
   assert.equal(habitatOf([1128], TOWN), F2_FIELD1, "Ashbeetles live on the Terraces only");

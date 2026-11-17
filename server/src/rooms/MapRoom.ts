@@ -75,6 +75,7 @@ import { redis } from "../redis.ts";
 import { Timeline } from "../timeline.ts";
 import { BossSystem } from "../boss.ts";
 import { TowerSystem } from "../tower.ts";
+import { MiniBossSystem } from "../minibosses.ts";
 import { StatusSystem } from "../status.ts";
 import { isScKey } from "../../../shared/rules/status_change.ts";
 import { PetSystem } from "../pets.ts";
@@ -306,6 +307,8 @@ export class MapRoom extends Room<{ state: MapState }> {
   boss: BossSystem = new BossSystem(this);
   /** 2.7.0 the Tower rule on a floor guardian's map (server/src/tower.ts); it reads the room's map when asked. */
   tower: TowerSystem = new TowerSystem(this);
+  /** 2.9.0 the roaming mini-bosses that rise on this map (server/src/minibosses.ts) */
+  minis: MiniBossSystem = new MiniBossSystem(this);
   get mapTitle() { return MAP_INFO[this.mapName].title; }
   /** Status changes: sc_data of every unit, timers, effects, skills / cards / monster skills that apply them (server/src/status.ts). */
   status: StatusSystem = new StatusSystem(this);
@@ -1057,6 +1060,17 @@ export class MapRoom extends Room<{ state: MapState }> {
     const cell = mobSpawnCell(this.map, slot.sd, slot.center, rndValue);
     if (!cell) { this.clock.setTimeout(() => this.spawnMonster(id), SPAWN_CONF.mob_respawn_time); return; }
     this.addMonster(id, mobId, cell.x, cell.y);
+  }
+
+  /** 2.9.0 the room closes: a roaming mini-boss standing here rises again when the map reopens (server/src/minibosses.ts). */
+  onDispose() { this.minis.dispose(); }
+
+  /** A monster leaves the map without dying (a dev remove, a boss's phase change): its spawn line, state, brain and boss data go. */
+  removeMonster(id: string) {
+    this.mobSpawns.delete(id);
+    this.boss.forget(id);
+    this.state.monsters.delete(id);
+    this.brains.delete(id);
   }
 
   /** mob_spawn's body (mob.cpp:1175-1195) for monster `id` of species `mobId` standing on (x, y): idle, first random walk 4000-4999 ms
@@ -2075,6 +2089,7 @@ export class MapRoom extends Room<{ state: MapState }> {
       this.mobAi(id, m, b, def, now); // its chase is checked on every cell it reaches (nextCell -> mobUpdateChase)
     }
     this.tower.tick(now); // 2.7.0: the floor guardian's direction hint
+    this.minis.tick(Date.now()); // 2.9.0: a roaming mini-boss due on this map rises
     this.boss.tick(now); // bosses re-check their summon skill once a second
     this.pets.tick(now); // pet_ai_sub_hard: follow / fight, and where clients draw the walking pets
     // where clients draw walking units between cells (the cells themselves change in the step events above)

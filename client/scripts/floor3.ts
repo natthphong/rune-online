@@ -64,6 +64,7 @@ if (room.map !== F2_TOWN) fail("an uncleared climber left Lanternrest by the sea
 say(`OK: the stair to floor 3 is sealed without ${F2.clearVar} ("${mes.find((t) => t.includes("sealed"))!.replace(/\^[0-9a-fA-F]{6}/g, "").slice(0, 60)}...")`);
 
 // ---- 2) floor 2 cleared -> up ----
+dev({ op: "var", id: "-", move: "tower_f1", dmg: 1 }); // 2.9.0 the Ascent Stair asks for floor 1's guardian too
 dev({ op: "var", id: "-", move: F2.clearVar, dmg: 1 });
 await wait(400);
 if (!(await walkNear(room, () => F2_STAIR3_IN, 0, 10_000))) fail("could not step off the stair");

@@ -34,7 +34,10 @@
     "legend": "node scripts/legend.ts",
     "load": "node scripts/load.ts",
     "jobs2": "node scripts/jobs2.ts",
-    "i18n": "node scripts/i18n-check.ts"
+    "i18n": "node scripts/i18n-check.ts",
+    "rec60": "node scripts/rec60.ts",
+    "floors": "node scripts/floors.ts",
+    "minibosses": "node scripts/minibosses.ts"
   },
   "dependencies": {
     "@colyseus/sdk": "^0.18.5",

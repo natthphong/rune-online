@@ -11,6 +11,8 @@ import { F2_TOWN } from "../../floor2.ts";
 import { SEAL_VAR } from "../f1/stair.ts";
 import { SPOT, naviTo } from "../f1/chapter1.ts";
 import { CRYSTAL_LANDING, F2_GATE_LEVEL, F2_VAR, Q2 } from "./chapter2.ts";
+import { towerFloor } from "../../tower.ts";
+import { F1_WILD, WILD_MOBS } from "../../wilds.ts";
 
 const N = "-! The Ascent Stair !-";
 
@@ -27,6 +29,13 @@ export const ascentStair: NpcScript = async (s) => {
     s.mes(N, "The rune-light across the first step reads your measure and finds it short.",
       `The upper floor asks ^4d4dffBase Lv ${F2_GATE_LEVEL}^000000. You are Base Lv ^4d4dff${s.get("BaseLevel")}^000000.`,
       "Hunt the catacombs below the keep a while longer.");
+    return s.close();
+  }
+  // 2.9.0 the Tower rule: the floor's guardian (Gloopking, roaming the Greenhollow Wilds) must have fallen to the climber's party
+  if (s.get(towerFloor(1)!.clearVar) < 1) {
+    s.mes(N, "The rune-light lifts a little, then settles again. A second seal glows on the step: a slime's crown in green light.",
+      "^4d4dffThe floor's guardian still stands.^000000",
+      `Fell ${naviTo("Gloopking", { map: F1_WILD, ...WILD_MOBS[F1_WILD].hunt })} in the Greenhollow Wilds (the ring stones west of this Mire); it rises somewhere different every time.`);
     return s.close();
   }
   s.set(F2_VAR, 1);

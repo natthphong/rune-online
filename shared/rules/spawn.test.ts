@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { type GameMap } from "../map.ts";
-import { DUNGEONS, FIELDS, FIELD_MOBS, HUNT_MAPS, MAP_NAMES, MVP_HALL, WARPS, buildMap } from "../maps.ts";
+import { DUNGEONS, FIELDS, FIELD_MOBS, HUNT_MAPS, MAP_NAMES, WARPS, buildMap } from "../maps.ts";
 import { MOB_BY_ID } from "./data.ts";
 import * as MAPS from "../maps.ts";
 import { MD } from "./mobai.ts";
@@ -122,7 +122,7 @@ test("W01: each field's species (FIELD_MOBS, what the client navigates by) are e
   }
 });
 
-test("W03: each catacomb level's species are its spawn lines, a species on at most two neighbouring levels and on no field, the MVP in B3's hall", () => {
+test("W03: each catacomb level's species are its spawn lines, a species on at most two neighbouring levels and on no field, no boss (2.9.0: Gloopking roams the Greenhollow Wilds)", () => {
   const text = readFileSync(new URL("../data/spawns.txt", import.meta.url), "utf8");
   const { MAP_INFO } = MAPS;
   const fieldIds = new Set(FIELDS.flatMap((f) => FIELD_MOBS[f].mobs));
@@ -140,10 +140,7 @@ test("W03: each catacomb level's species are its spawn lines, a species on at mo
     }
     for (const s of lines) if (!s.boss) assert.ok(s.x >= 0 && s.xs > 0, `${d}: ${s.name} has its own chamber`);
     const bosses = lines.filter((s) => s.boss);
-    if (d === MVP_HALL.map) {
-      assert.equal(bosses.length, 1);
-      assert.deepEqual([bosses[0].mobId, bosses[0].x, bosses[0].y], [3810, MVP_HALL.x, MVP_HALL.y], "Gloopking on its hall cell");
-    } else assert.equal(bosses.length, 0, `${d}: no boss`);
+    assert.equal(bosses.length, 0, `${d}: no boss`);
   });
   for (const [id, on] of levels) assert.ok(on.length <= 2 && on[on.length - 1] - on[0] <= 1, `${MOB_BY_ID.get(id)!.name} on levels ${on}`);
 });

@@ -114,23 +114,12 @@ await down(DUN1, stairDown.to);
 await down(DUN2, DUNGEON_STAIRS[DUN2].upIn);
 await down(DUN3, DUNGEON_STAIRS[DUN3].upIn);
 
-// 4) the MVP's hall
-const mvpEntry = () => [...S().monsters.entries()].find(([, m]: any) => m.mobId === 3810) as [string, any] | undefined;
-const tomb = () => [...S().npcs.keys()].find((k: string) => k.startsWith("tomb_"));
-const mvp = mvpEntry();
-if (mvp && !mvp[1].dead) {
-  const [id, m] = mvp;
-  if (m.boss !== 2) fail(`Gloopking boss flag ${m.boss}`);
-  if (distance(Math.round(m.x) - MVP_HALL.x, Math.round(m.y) - MVP_HALL.y) > 14) fail(`Gloopking strayed from its hall: ${m.x},${m.y}`);
-  say(`${DUN3}: Gloopking (MVP) in its hall at ${Math.round(m.x)},${Math.round(m.y)}, HP ${m.hp}/${m.maxHp}`);
-  if (process.env.DUNGEON_KILL) {
-    room.send(Msg.devBoss, { op: "kill", id });
-    await until(() => mvps.length > 0, 5000, "the MVP fanfare");
-    await until(() => !!tomb(), 15_000, "Gloopking's tomb");
-    say(`${DUN3}: Gloopking slain (dev shortcut): MVP ${JSON.stringify(mvps[0])}, tomb up`);
-  }
-} else if (tomb()) say(`${DUN3}: Gloopking is dead (its tomb stands in the hall); it returns 60-120 min after its death`);
-else fail(`${DUN3}: neither Gloopking nor its tomb`);
+// 4) the MVP's hall: empty since 2.9.0 (the Tower rule: Gloopking left it and roams the Greenhollow Wilds, f1_field05; the floors bot
+//    hunts it there). The hall is still reachable and no boss waits in it.
+const inHall = [...S().monsters.values()].filter((m: any) => m.boss === 2 && !m.dead);
+if (inHall.length) fail(`${DUN3}: a boss is still in the hall (${inHall.map((m: any) => m.mobId)})`);
+say(`${DUN3}: the MVP hall at ${MVP_HALL.x},${MVP_HALL.y} is empty (Gloopking roams the Greenhollow Wilds now)`);
+void mvps;
 
 // 5) back up: B3 -> B2 -> B1 -> the Mire (arriving beside the stair, off its trigger, so it does not send us straight back down)
 for (const [to, at] of [[DUN2, DUNGEON_STAIRS[DUN2].downIn!], [DUN1, DUNGEON_STAIRS[DUN1].downIn!], [MIRE, MIRE_STAIR_IN]] as const) {

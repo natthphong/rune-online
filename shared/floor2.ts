@@ -98,6 +98,9 @@ export function generateTown2(layout: TownLayout): GameMap {
   return { w, h, height, kind, blocked, props, town: layout, theme: "dusk" };
 }
 
+/** 2.9.0: the portal in Cinderwatch Heights' south-west ruin, the way into the Sunscour Ruins (floor 2's guardian map). */
+export const F2_WILDS = { x: 16, y: 68 } as const;
+
 // ---------- the fields (80x80) ----------
 export const F2_FIELD_THEMES: Record<F2FieldName, FieldTheme> = {
   // terraces of dry amber grass and pines in the evening light, west of the town; the road comes in from the east gate
@@ -113,7 +116,7 @@ export const F2_FIELD_THEMES: Record<F2FieldName, FieldTheme> = {
     key: "ash", w: 80, h: 80, water: 0.2, relief: 3.0, stone: 0.5, dirt: 0.66,
     props: [["rock", 0.05], ["deadtree", 0.028], ["stump", 0.006]], border: ["rock", "deadtree", "rock"], borderDensity: 0.85,
     gates: { W: 40 },
-    keep: [{ x: 6, y: 40, r: 2 }, { x: 46, y: 40, r: 2 }, { x: 66, y: 22, r: 2 }, { x: 60, y: 44, r: 2 }],
+    keep: [{ x: 6, y: 40, r: 2 }, { x: 46, y: 40, r: 2 }, { x: 66, y: 22, r: 2 }, { x: 60, y: 44, r: 2 }, { ...F2_WILDS, r: 2 }],
     ruins: [{ x: 66, y: 18, w: 5, h: 4 }],
     stair: { x: 66, y: 18 },
   },

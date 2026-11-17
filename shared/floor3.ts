@@ -80,7 +80,7 @@ export type TowerMob = {
   walkSpeed?: number; attackDelay?: number; attackMotion?: number; range?: number; mvpExp?: number;
   /** "Mvp" = the floor guardian, "Boss" = a mini-boss, undefined = an ordinary monster */
   boss?: "Mvp" | "Boss";
-  race: "Undead" | "Demon" | "Brute" | "Formless"; element: "Undead" | "Dark" | "Poison"; size?: "Small" | "Medium" | "Large";
+  race: "Undead" | "Demon" | "Brute" | "Formless"; element: "Undead" | "Dark" | "Poison" | "Water"; size?: "Small" | "Medium" | "Large";
   /** client look: 0xRRGGBB multiplied over the base species' sprite, and its scale */
   tint: number; scale: number;
   /** the species whose sheets draw it when not `base` */
@@ -90,21 +90,19 @@ export const MORROWGAST = 4310;
 export const ASHGRIM = 4311;
 export const F3_MOBS: readonly TowerMob[] = [
   // the villagers who drank from the wells
-  { id: 4301, base: 1015, name: "Plaguewalker", level: 50, hp: 2400, atk: 150, def: 40, baseExp: 1500, jobExp: 1100, race: "Undead", element: "Undead", tint: 0x9bd36a, scale: 1.05 },
+  { id: 4301, base: 1015, name: "Plaguewalker", level: 50, hp: 2400, atk: 150, def: 40, baseExp: 1500, jobExp: 1100, race: "Undead", element: "Undead", tint: 0xffffff, scale: 1, art: 4301 },
   // the shepherds' hounds, rabid and fast
-  { id: 4302, base: 1013, name: "Rotfang", level: 52, hp: 2100, atk: 170, def: 35, baseExp: 1650, jobExp: 1200, walkSpeed: 150, race: "Brute", element: "Poison", tint: 0x8fae5c, scale: 1.0 },
+  { id: 4302, base: 1013, name: "Rotfang", level: 52, hp: 2100, atk: 170, def: 35, baseExp: 1650, jobExp: 1200, walkSpeed: 150, race: "Brute", element: "Poison", tint: 0xffffff, scale: 1, art: 4302 },
   // carrion bats that roost in the caved-in roofs
-  { id: 4303, base: 1005, name: "Blightwing", level: 51, hp: 1700, atk: 140, def: 28, baseExp: 1400, jobExp: 1050, race: "Brute", element: "Poison", tint: 0xa7e06f, scale: 1.0 },
+  { id: 4303, base: 1005, name: "Blightwing", level: 51, hp: 1700, atk: 140, def: 28, baseExp: 1400, jobExp: 1050, race: "Brute", element: "Poison", tint: 0xffffff, scale: 1, art: 4303 },
   // the witches' wardens, armour stitched onto the dead
-  { id: 4304, base: 1028, name: "Hexbound Sentry", level: 55, hp: 3200, atk: 190, def: 62, baseExp: 2100, jobExp: 1500, race: "Undead", element: "Undead", tint: 0x86b98c, scale: 1.1 },
+  { id: 4304, base: 1028, name: "Hexbound Sentry", level: 55, hp: 3200, atk: 190, def: 62, baseExp: 2100, jobExp: 1500, race: "Undead", element: "Undead", tint: 0xffffff, scale: 1, art: 4304 },
   // what was left over
-  { id: 4305, base: 1076, name: "Witchbone", level: 56, hp: 2900, atk: 205, def: 45, baseExp: 2200, jobExp: 1600, race: "Undead", element: "Dark", tint: 0xb9f08a, scale: 1.05 },
+  { id: 4305, base: 1076, name: "Witchbone", level: 56, hp: 2900, atk: 205, def: 45, baseExp: 2200, jobExp: 1600, race: "Undead", element: "Dark", tint: 0xffffff, scale: 1, art: 4305 },
   // the floor guardian: the village's alderman, the witches' finished work
   { id: MORROWGAST, base: 3810, name: "Morrowgast", level: 58, hp: 230000, atk: 175, def: 70, baseExp: 60000, jobExp: 48000, mvpExp: 15000, boss: "Mvp", range: 2,
-    walkSpeed: 140, attackDelay: 900, attackMotion: 450, race: "Undead", element: "Undead", size: "Large", tint: 0x7fd65a, scale: 1.25 },
-  // the mini-boss: a horned goat-demon with a scythe the witches called up and could not send back
-  { id: ASHGRIM, base: 3999, name: "Ashgrim", level: 56, hp: 110000, atk: 160, def: 60, baseExp: 30000, jobExp: 24000, mvpExp: 0, boss: "Boss", range: 2,
-    walkSpeed: 150, attackDelay: 1000, attackMotion: 520, race: "Demon", element: "Dark", size: "Large", tint: 0x8a3a52, scale: 1.2 },
+    walkSpeed: 140, attackDelay: 900, attackMotion: 450, race: "Undead", element: "Undead", size: "Large", tint: 0xffffff, scale: 1.3, art: 4310 },
+  // the mini-boss Ashgrim (4311 = its floor-3 row) moved to shared/minibosses.ts (2.9.0: it roams floors 1-3)
 ];
 export const F3_MOB_BY_ID: ReadonlyMap<number, TowerMob> = new Map(F3_MOBS.map((m) => [m.id, m]));
 /** The floor's ordinary species and the middle of its hunting grounds (shared/maps.ts FIELD_MOBS). */

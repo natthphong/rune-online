@@ -17,7 +17,7 @@ export const stairToFloor3: NpcScript = async (s) => {
   const N = "-! The Stair to Floor 3 !-";
   if (s.get(F2.clearVar) < 1) {
     s.mes(N, "A stair of black iron climbs out of Lanternrest's north wall into the dark. A chain of ember-light hangs across it.",
-      "^4d4dffThe way up is sealed.^000000 It opens for the party that fells ^ff4d4dDevo^000000, the Ember Floor's guardian, in the Emberhollow Vault.");
+      "^4d4dffThe way up is sealed.^000000 It opens for the party that fells ^ff4d4dDevo^000000, the Ember Floor's guardian. It roams the Sunscour Ruins (south-west of Cinderwatch Heights) and rises somewhere different every time.");
     return s.close();
   }
   s.set(F3_VAR, 1);

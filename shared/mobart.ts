@@ -9,7 +9,9 @@ export const ART_STANDIN: Record<number, number> = {
 // 2.7.0 the Tower's own species (shared/floor3.ts F3_MOBS) are drawn with the sheets of the species named by their row's `art`
 // (default: the `base` row they are built from), multiplied by the row's `tint` and scaled by its `scale`, until their own sheets
 // (mob_<id>_move / _act) are drawn. The client asks these three for every monster it draws.
-import { F3_MOB_BY_ID } from "./floor3.ts";
+import { F3_MOBS } from "./floor3.ts";
+import { MINI_MOBS } from "./minibosses.ts";
+const F3_MOB_BY_ID = new Map([...F3_MOBS, ...MINI_MOBS].map((m) => [m.id, m])); // 2.9.0 + the mini-bosses' rows
 /** The species whose sprite sheets draw monster `id`. */
 export const artOf = (id: number): number => ART_STANDIN[id] ?? F3_MOB_BY_ID.get(id)?.art ?? F3_MOB_BY_ID.get(id)?.base ?? id;
 /** 0xRRGGBB multiplied over the sprite (0xffffff = as painted) and the sprite's extra scale. */

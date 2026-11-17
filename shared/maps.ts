@@ -15,10 +15,12 @@ import { generateDungeon, generateField, gateCell, generateMap, walkable, type D
 import { TOWN_CELLS, TOWN_GATE_CELLS, TOWN_IN_CELLS, generateTown as generateTownCells, townLayout } from "./town.ts";
 import {
   F2_BOSS_HALL, F2_DUN, F2_DUN_STAIRS, F2_DUN_THEME, F2_FIELDS, F2_FIELD1, F2_FIELD2, F2_FIELD_GATE, F2_FIELD_THEMES, F2_GATE_OF, F2_MAP_NAMES, F2_TOWN,
-  F2_VAULT_STAIR, F2_VAULT_STAIR_IN, T2_CELLS, T2_GATE_CELLS, T2_IN_CELLS, generateTown2, townLayout2, type F2FieldName,
+  F2_VAULT_STAIR, F2_VAULT_STAIR_IN, F2_WILDS, T2_CELLS, T2_GATE_CELLS, T2_IN_CELLS, generateTown2, townLayout2, type F2FieldName,
 } from "./floor2.ts";
 import { F3_ARRIVAL, F3_GATE, F3_HUNT, F3_MAP, generateFloor3 } from "./floor3.ts";
 export { F3_MAP };
+import { F1_WILD, F2_WILD, WILD_MAPS, WILD_MOBS, generateWild, wildGate, type WildName } from "./wilds.ts";
+export { F1_WILD, F2_WILD, WILD_MAPS, type WildName };
 export { F2_BOSS_HALL, F2_DUN, F2_DUN_STAIRS, F2_DUN_THEME, F2_FIELDS, F2_FIELD1, F2_FIELD2, F2_FIELD_THEMES, F2_TOWN, F2_VAULT_STAIR, F2_VAULT_STAIR_IN, T2_CELLS, type F2FieldName };
 
 export const TOWN = "f1_town01";
@@ -36,10 +38,10 @@ export const DUN3 = "f1_dun03";
 export const DUNGEONS = [DUN1, DUN2, DUN3] as const;
 export type DungeonName = (typeof DUNGEONS)[number];
 /** Maps with monsters to hunt (fields and dungeon levels): FIELD_MOBS, habitatOf, the auto-hunt. */
-export const HUNT_MAPS = [...FIELDS, ...DUNGEONS, ...F2_FIELDS, F2_DUN, F3_MAP] as const;
-export type HuntMap = FieldName | DungeonName | F2FieldName | typeof F2_DUN | typeof F3_MAP;
-export type MapName = typeof TOWN | FieldName | DungeonName | (typeof F2_MAP_NAMES)[number] | typeof F3_MAP;
-export const MAP_NAMES: MapName[] = [TOWN, ...FIELDS, ...DUNGEONS, ...F2_MAP_NAMES, F3_MAP];
+export const HUNT_MAPS = [...FIELDS, ...DUNGEONS, ...F2_FIELDS, F2_DUN, F3_MAP, ...WILD_MAPS] as const;
+export type HuntMap = FieldName | DungeonName | F2FieldName | typeof F2_DUN | typeof F3_MAP | WildName;
+export type MapName = typeof TOWN | FieldName | DungeonName | (typeof F2_MAP_NAMES)[number] | typeof F3_MAP | WildName;
+export const MAP_NAMES: MapName[] = [TOWN, ...FIELDS, ...DUNGEONS, ...F2_MAP_NAMES, F3_MAP, ...WILD_MAPS];
 export const isMapName = (m: unknown): m is MapName => MAP_NAMES.includes(m as MapName);
 export const isField = (m: unknown): m is FieldName => FIELDS.includes(m as FieldName);
 export const isDungeon = (m: unknown): m is DungeonName => DUNGEONS.includes(m as DungeonName);
@@ -64,9 +66,15 @@ export const MAP_INFO: Record<MapName, MapInfo> = {
   [F2_DUN]: { title: "Emberhollow Vault", sub: "Dungeon — Lv 34-46", town: false, music: "dungeon", band: [34, 46] },
   // 2.7.0: floor 3 is ONE map, the whole floor (shared/floor3.ts; the Tower rule, shared/tower.ts)
   [F3_MAP]: { title: "Witherwick", sub: "Floor 3 — The Blighted Shire — Lv 50-58", town: false, music: "ruins", band: [50, 58] },
+  // 2.9.0: the floors' guardian maps (shared/wilds.ts). No `band`: the auto-hunt never walks a climber into a roaming guardian
+  [F1_WILD]: { title: "Greenhollow Wilds", sub: "Floor 1 — The Verdant Floor — Lv 5-20", town: false, music: "field" },
+  [F2_WILD]: { title: "Sunscour Ruins", sub: "Floor 2 — The Ember Floor — Lv 32-45", town: false, music: "highland" },
 };
 /** The Colyseus room of a map: the west field keeps the original room name, so old clients and the test bots join it unchanged. */
 export const roomOf = (m: MapName) => (m === FIELD ? "map" : m);
+
+/** 2.9.0: the ring stones on the Mire's west side, the way into the Greenhollow Wilds (floor 1's guardian map). */
+export const MIRE_WILDS = { x: 10, y: 54 } as const;
 
 // ---------- the four fields ----------
 /** Where each field's road comes in from town (the gate cell is gateCell(theme, edge, at)) and where a walker arrives. */
@@ -107,7 +115,7 @@ export const FIELD_THEMES: Record<FieldName, FieldTheme> = {
     key: "swamp", w: 108, h: 108, water: 0.4, relief: 1.2, stone: 0.86, dirt: 0.6,
     props: [["deadtree", 0.05], ["tree", 0.012], ["stump", 0.015], ["rock", 0.006]], border: ["deadtree", "tree", "deadtree"], borderDensity: 0.85,
     gates: { N: 54 },
-    keep: [{ x: 54, y: 6, r: 2 }, { x: 54, y: 66, r: 2 }, { x: 54, y: 30, r: 1 }, { x: 30, y: 22, r: 1 }, { x: 34, y: 94, r: 2 }],
+    keep: [{ x: 54, y: 6, r: 2 }, { x: 54, y: 66, r: 2 }, { x: 54, y: 30, r: 1 }, { x: 30, y: 22, r: 1 }, { x: 34, y: 94, r: 2 }, { ...MIRE_WILDS, r: 2 }],
     ruins: [{ x: 54, y: 64, w: 6, h: 5 }, { x: 34, y: 52, w: 4, h: 3 }, { x: 34, y: 94, w: 4, h: 3 }],
     stair: { x: 54, y: 66 },
   },
@@ -164,6 +172,7 @@ export function buildMap(name: MapName, seed: number): GameMap {
   if (name === TOWN) return generateTown();
   if (name === F2_TOWN) return generateTown2(townLayout2({ W: sign2(F2_FIELD1), E: sign2(F2_FIELD2), S: ["The Ascent Stair", "down to Floor 1"] }));
   if (name === F3_MAP) return generateFloor3(fieldSeed(name, seed));
+  if (name === F1_WILD || name === F2_WILD) return generateWild(name, fieldSeed(name, seed));
   if (name === F2_DUN) return generateDungeon(fieldSeed(name, seed), F2_DUN_THEME);
   if (isDungeon(name)) return generateDungeon(fieldSeed(name, seed), DUNGEON_THEMES[name]);
   if (name === F2_FIELD1 || name === F2_FIELD2) return generateField(fieldSeed(name, seed), F2_FIELD_THEMES[name]);
@@ -249,6 +258,15 @@ const F3_WARPS: Warp[] = [
   { name: "town02_field07", map: F2_TOWN, x: F2_STAIR3.x, y: F2_STAIR3.y, spanx: 1, spany: 1, to: { ...F3_ARRIVAL }, npc: "f2_stair3" },
   { name: "field07_town02", map: F3_MAP, x: F3_GATE.x, y: F3_GATE.y, spanx: 1, spany: 1, to: F2_STAIR3_IN },
 ];
+/** 2.9.0 the floors' wilds (shared/wilds.ts): a portal in the Mire's west ring stones and in Cinderwatch Heights' south-west ruin, and
+ *  each wild's gate back. */
+const WILD_WARPS: Warp[] = ([[F1_WILD, MIRE, MIRE_WILDS], [F2_WILD, F2_FIELD2, F2_WILDS]] as const).flatMap(([w, from, at]): Warp[] => {
+  const { gate, arrival } = wildGate(w), n = w.slice(3), m = from.slice(3);
+  return [
+    { name: `${m}_${n}`, map: from, ...at, spanx: 1, spany: 1, to: { map: w, ...arrival } },
+    { name: `${n}_${m}`, map: w, ...gate, spanx: 1, spany: 1, to: { map: from, x: at.x + 3, y: at.y } },
+  ];
+});
 export const WARPS: Warp[] = [
   ...FIELDS.flatMap((f): Warp[] => {
     const side = GATE_OF[f], { gate, arrival } = fieldGate(f), n = f.slice(3); // field01 ...
@@ -269,6 +287,7 @@ export const WARPS: Warp[] = [
   }),
   ...F2_WARPS,
   ...F3_WARPS,
+  ...WILD_WARPS,
 ];
 /** The plain warp whose area holds (x, y) on `map` (npc_touch_areanpc: |x - nd.x| <= spanx, |y - nd.y| <= spany). Scripted
  *  doors (`npc`) are their NPC's business. */
@@ -348,6 +367,7 @@ export const FIELD_MOBS: Record<HuntMap, { mobs: number[]; hunt: { x: number; y:
   [F2_FIELD1]: { mobs: [1128, 1176, 1033, 1028], hunt: { x: 50, y: 40 } },
   [F2_FIELD2]: { mobs: [1123, 1013, 1391], hunt: { x: 46, y: 40 } },
   [F2_DUN]: { mobs: [1028, 1013, 1123], hunt: { x: 31, y: 34 } },
+  ...WILD_MOBS, // 2.9.0 the floors' wilds
   [F3_MAP]: F3_HUNT, // 2.7.0 floor 3: the blighted village's dead (the guardian and the mini-boss are not hunting targets)
 };
 /** The nearest hunting map (fewest warps from `from`) where any of these monsters lives, or undefined. */

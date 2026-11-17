@@ -6,7 +6,7 @@
 //   mob.cpp  mob_ai_sub_hard_slavemob  (a slave dies with a missing master, follows it, takes the master's target)
 //   mob.cpp  mobskill_use / mob_summonslave / mobskill_delay  (NPC_SUMMONSLAVE: onspawn, then re-summon when the slaves are gone)
 //   npc.cpp  run_tomb           (the tomb's dialog: who, when, killed by)
-import { Msg, type AnnounceEvent, type BossAggroEvent, type BossHopEvent, type BossImpactEvent, type BossShape, type BossTeleEvent, type BossChargeEvent, type BossSlamEvent, type BossSpitEvent, type BossSplitEvent, type DevBossMsg, type HitEvent, type ItemGetEvent, type MvpEvent, type MvpRewardEvent } from "../../shared/protocol.ts";
+import { Msg, type AnnounceEvent, type BossAggroEvent, type BossHopEvent, type BossImpactEvent, type BossShape, type BossTeleEvent, type BossChargeEvent, type BossFormEvent, type BossSlamEvent, type BossSpitEvent, type BossSplitEvent, type DevBossMsg, type HitEvent, type ItemGetEvent, type MvpEvent, type MvpRewardEvent } from "../../shared/protocol.ts";
 import type { Client, Delayed } from "@colyseus/core";
 import { MOB_BY_ID, type Mob } from "../../shared/rules/data.ts";
 import { ITEMS } from "../../shared/rules/items.ts";
@@ -16,7 +16,7 @@ import { ATK, BL, mobAttack } from "../../shared/rules/battle.ts";
 import type { MobStatus } from "../../shared/rules/status.ts";
 import {
   BOSS_MOVES, IDLE_MAX_MS, areaDue, chargeCooldown, chargeDue, chargeLane, headbuttDue, hopCell, inLaneReach, inShape, isEnraged, isRaged, knockbackCell, lineEnd,
-  ragedMs, rateDamage, safeSpots, spitDamage, spitDue, spitFlightMs, splitsDue,
+  ragedMs, rateDamage, ringCells, safeNearPlayers, safeSpots, spitDamage, spitDue, spitFlightMs, splitsDue,
   type BossArea, type BossMoves, type Cell, type Shape,
 } from "../../shared/rules/bossmoves.ts";
 import { SCSTART } from "../../shared/rules/status_change.ts";
@@ -30,6 +30,7 @@ import {
 import type { JobKey } from "../../shared/rules/data.ts";
 import { Npc, type Monster, type MapRoom, type Player } from "./rooms/MapRoom.ts";
 import { BOSS_KIND, TOMB_NAME, TOMB_SPRITE, Tombs, bossKindOf } from "./tombs.ts";
+import { miniStatus } from "./minibosses.ts";
 
 export { BOSS_KIND, TOMB_NAME, TOMB_SPRITE, Tombs, bossKindOf };
 export type { Tomb } from "./tombs.ts";
@@ -45,6 +46,8 @@ type MoveClock = {
   walkMs: number; delayMs: number;
   /** fight numbers for the dev "stat" op and the report: the longest time it stood idle with a target, moves started by name */
   idleMax: number; used: Record<string, number>;
+  /** 2.9.0 the phase change started */
+  transformed?: boolean;
 };
 type BossBrain = NonNullable<ReturnType<MapRoom["brains"]["get"]>>;
 
@@ -115,6 +118,7 @@ export class BossSystem {
     for (const [id, c] of this.movers) {
       const m = this.room.state.monsters.get(id), b = this.room.brains.get(id);
       if (!m || m.dead || !b) { this.movers.delete(id); continue; }
+      if (this.transform(id, m, b, c)) continue;
       this.split(id, m, c);
       this.shout(id, m, c);
       this.feel(id, m, b, c);
@@ -131,6 +135,44 @@ export class BossSystem {
         if (c.spitAt !== spat) { c.actUntil = Math.max(c.actUntil, t + 400); c.used.spit = (c.used.spit ?? 0) + 1; }
       } else if (c.moves.feel) this.hop(id, m, b, c, false);
     }
+  }
+
+  // ---------- 2.9.0 phase change ----------
+  /** Under its transform threshold the boss stops for `ms` (Msg.bossForm to the whole map: the client's collapse / swirl / rise), then a
+   *  monster of the next form takes its cell, HP, target and damage log (the mini-boss registry follows the new id). */
+  private transform(id: string, m: Monster, b: BossBrain, c: MoveClock): boolean {
+    const tr = c.moves.transform, room = this.room;
+    if (!tr || c.transformed || m.hp * 100 >= tr.hpBelow * m.maxHp) return !!c.transformed;
+    c.transformed = true;
+    const now = room.exactNow();
+    c.busyUntil = now + tr.ms + 500;
+    room.stopAttack(id, b);
+    room.haltWalk(m, room.walkOf(b, m));
+    c.used.transform = 1;
+    const all = (type: string, msg: unknown) => { for (const cl of room.clients) cl.send(type, msg); };
+    all(Msg.bossForm, { id, to: tr.to, ms: tr.ms, text: tr.text } satisfies BossFormEvent);
+    room.timeline.add(now + tr.ms, () => {
+      if (room.state.monsters.get(id) !== m || m.dead) return;
+      const cell = room.cell(m), slot = room.mobSpawns.get(id), ratio = m.hp / m.maxHp, target = b.target, log = b.dmglog;
+      const nid = `m${room.nextMonsterId++}`;
+      if (slot) room.mobSpawns.set(nid, { sd: { ...slot.sd, mobId: tr.to, x: cell.x, y: cell.y }, center: cell });
+      room.removeMonster(id);
+      const nm = room.addMonster(nid, tr.to, cell.x, cell.y), nb = room.brains.get(nid)!;
+      nm.hp = Math.max(1, Math.round(nm.maxHp * ratio));
+      nb.dmglog = log;
+      if (target) nb.target = target;
+      room.minis.replaced(id, nid);
+      all(Msg.bossForm, { id: nid, to: tr.to, ms: 0, from: id } satisfies BossFormEvent);
+    });
+    return true;
+  }
+
+  /** Everything this system keeps on a monster that leaves without dying (a dev remove, a phase change). */
+  forget(id: string) {
+    for (const [sid, mid] of this.masterOf) if (mid === id) { this.room.state.monsters.delete(sid); this.room.brains.delete(sid); this.masterOf.delete(sid); }
+    this.casters.delete(id);
+    this.movers.delete(id);
+    this.tombs.destroy(id);
   }
 
   // ---------- 2.7.0 boss feel: aggro on sight, run, opener, enrage, never idle ----------
@@ -202,13 +244,20 @@ export class BossSystem {
     c.used[mv.name] = (c.used[mv.name] ?? 0) + 1;
     room.stopAttack(id, b);
     room.haltWalk(m, room.walkOf(b, m));
-    if (mv.text) room.sendArea("AREA", id, Msg.bossSplit, { id, text: mv.text, kind: "roar" } satisfies BossSplitEvent);
+    // 2.9.0 a move wider than the view range (the Long Harvest) is told to the whole map
+    const say = (type: string, msg: unknown) => { if (mv.r > 14) { for (const cl of room.clients) cl.send(type, msg); } else room.sendArea("AREA", id, type, msg); };
+    if (mv.text) say(Msg.bossSplit, { id, text: mv.text, kind: "roar" } satisfies BossSplitEvent);
     const shapes: { s: Shape & { shape: BossShape }; at: number }[] = [];
     if (mv.shape === "line") {
       const e = lineEnd(a, tc, mv.length ?? 8);
       shapes.push({ s: { shape: "line", x: a.x, y: a.y, r: mv.r, ex: e.x, ey: e.y }, at: now + mv.windMs });
     } else if (mv.shape === "sweep") {
-      shapes.push({ s: { shape: "sweep", x: a.x, y: a.y, r: mv.r, safe: safeSpots(ok, a, mv.r, mv.safe ?? 3, mv.safeR ?? 2, (n) => this.rnd() % n) }, at: now + mv.windMs });
+      const under = [...room.state.players.values()].filter((p) => !p.dead).map((p) => room.cell(p)).filter((p) => Math.hypot(p.x - a.x, p.y - a.y) <= mv.r);
+      const safe = mv.safeNear ? safeNearPlayers(ok, a, mv.r, under, mv.safeNear, mv.safe ?? 3, mv.safeR ?? 2, (n) => this.rnd() % n)
+        : safeSpots(ok, a, mv.r, mv.safe ?? 3, mv.safeR ?? 2, (n) => this.rnd() % n);
+      shapes.push({ s: { shape: "sweep", x: a.x, y: a.y, r: mv.r, safe }, at: now + mv.windMs });
+    } else if (mv.ring) { // 2.9.0 a ring of circles around the boss, one every stepMs
+      ringCells(a, mv.ring, mv.count ?? 8).forEach((p, i) => shapes.push({ s: { shape: "circle", x: p.x, y: p.y, r: mv.r }, at: now + mv.windMs + i * (mv.stepMs ?? 150) }));
     } else {
       const centre = mv.at === "self" ? a : tc;
       shapes.push({ s: { shape: "circle", x: centre.x, y: centre.y, r: mv.r }, at: now + mv.windMs });
@@ -219,14 +268,14 @@ export class BossSystem {
     }
     for (const { s, at } of shapes) {
       const geo = { shape: s.shape, x: s.x, y: s.y, r: s.r, ...(s.ex !== undefined ? { ex: s.ex, ey: s.ey } : {}), ...(s.safe ? { safe: [...s.safe] } : {}) };
-      room.sendArea("AREA", id, Msg.bossTele, { id, move: mv.name, ...geo, ms: at - now, ...(mv.leap ? { leap: true } : {}) } satisfies BossTeleEvent);
+      say(Msg.bossTele, { id, move: mv.name, ...geo, ms: at - now, ...(mv.leap ? { leap: true } : {}) } satisfies BossTeleEvent);
       room.timeline.add(at, (t) => {
         if (room.state.monsters.get(id) !== m || m.dead) return;
         if (mv.leap) { // it lands on the centre (or the nearest free cell to it)
           const land = ok(s.x, s.y) ? { x: s.x, y: s.y } : searchFreeCell(room.map, s.x, s.y, 1, 1, FREECELL_TRIES, this.rndValue);
           if (land) room.warpUnit(m, b, land.x, land.y);
         }
-        room.sendArea("AREA", id, Msg.bossImpact, { id, move: mv.name, ...geo } satisfies BossImpactEvent);
+        say(Msg.bossImpact, { id, move: mv.name, ...geo } satisfies BossImpactEvent);
         for (const [sid, p] of room.state.players) {
           if (p.dead || !inShape(s, room.cell(p))) continue;
           this.areaHit(id, b, sid, mv, { x: s.x, y: s.y }, t);
@@ -522,6 +571,7 @@ export class BossSystem {
     const mvpSid = mvpChar === undefined ? undefined : room.sessionOfChar(mvpChar);
     const mvp = mvpSid === undefined ? undefined : room.state.players.get(mvpSid);
     if (mvp && mvpSid !== undefined) this.reward(id, def, mvpSid, mvp, mvpChar!, owners, attackerCount(log, room.receiver));
+    room.minis.dead(id, mon.mobId); // 2.9.0 a roaming mini-boss: rolled onto a random floor
     room.tower.dead(id, mon, [mvpSid, killer, ...owners.map((c) => room.sessionOfChar(c))]); // 2.7.0 the Tower rule: the floor is cleared for their parties
 
     if (tombWanted(lineBoss)) {
@@ -621,14 +671,14 @@ export class BossSystem {
           return;
         }
         case "remove": { // a test boss and everything of it
-          const slot = room.mobSpawns.get(id);
-          if (!slot) return;
-          room.mobSpawns.delete(id);
-          for (const [sid, mid] of this.masterOf) if (mid === id) { room.state.monsters.delete(sid); room.brains.delete(sid); this.masterOf.delete(sid); }
-          room.state.monsters.delete(id); room.brains.delete(id);
-          this.casters.delete(id);
-          this.movers.delete(id);
-          this.tombs.destroy(id);
+          if (!room.mobSpawns.get(id)) return;
+          room.removeMonster(id);
+          return;
+        }
+        case "mini": { // 2.9.0 a roaming mini-boss (move = "ashgrim" | "ceruleen") here now: 8 cells east of the sender (x = 1) or a random spot
+          const c = room.cell(p), nid = room.minis.force(String(m.move), Number(m.x) === 1 ? { x: c.x + 8, y: c.y } : undefined);
+          const where = miniStatus().map((s) => `${s.key} ${s.alive ? `on floor ${s.floor} (${s.id})` : `due on floor ${s.floor}`}`).join(", ");
+          client.send(Msg.notice, { text: `[dev] mini ${m.move}: ${nid ?? "not on a floor map"} · ${where}` });
           return;
         }
       }

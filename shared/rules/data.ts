@@ -5,6 +5,7 @@ import mobsJson from "../data/mobs.json" with { type: "json" };
 
 import { TOWER } from "../tower.ts";
 import { F3_MOBS } from "../floor3.ts";
+import { MINI_MOBS } from "../minibosses.ts";
 
 export type JobKey = keyof typeof jobsJson;
 export type Job = (typeof jobsJson)[JobKey];
@@ -38,7 +39,7 @@ export const MOBS: Mob[] = mobsJson;
 // 2.7.0 floor 3's species (shared/floor3.ts F3_MOBS): each is an existing row (modes, motions, non-card drops) under our own id, name and numbers
 /** The Tower's own species (not rAthena rows): in MOB_BY_ID like any monster, kept out of MOBS (the imported roster the card / album / art rules run over). */
 export const TOWER_MOBS: Mob[] = [];
-for (const t of F3_MOBS) {
+for (const t of [...F3_MOBS, ...MINI_MOBS]) { // 2.9.0 + the roaming mini-bosses, one row per floor (shared/minibosses.ts)
   const base = MOBS.find((m) => m.id === t.base);
   if (!base) continue;
   const k = t.level / base.level, up = (v: number) => Math.max(1, Math.round(v * k));

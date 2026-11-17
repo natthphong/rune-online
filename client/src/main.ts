@@ -38,7 +38,7 @@ import { Fx } from "./fx.ts";
 import { StatusFx } from "./statusFx.ts";
 import { clearStatusList, setStatusList } from "./ui/statusIcons.ts";
 import { setPopObstacles, spawnPop, updatePops } from "./ui/damage.ts";
-import { bindBoss, bossLift } from "./ui/boss.ts";
+import { bindBoss, bossLift, bossLook, bossTag } from "./ui/boss.ts";
 import { bindTower } from "./ui/tower.ts";
 import { applyShake, clearPixelFx, frozen, initPixelFx, shake, spawn as pfx, updatePixelFx } from "./pixelFx.ts";
 import { applyI18n, bindLangSelects, t as tr } from "./i18n.ts"; // aliased: `t` is a local name in places
@@ -138,7 +138,8 @@ function loadMap(seed: number, name: MapName = FIELD) {
   (scene.background as THREE.Color).set(look.sky);
   (scene.fog as THREE.Fog).color.set(look.fog); (scene.fog as THREE.Fog).near = look.fogNear; (scene.fog as THREE.Fog).far = look.fogFar;
   hemi.color.set(look.hemiSky); hemi.groundColor.set(look.hemiGround); hemi.intensity = look.hemi;
-  setWeather(scene, map.theme === "blight"); setAmbience(map.theme === "blight" ? "ambience_blight" : null);
+  setWeather(scene, map.theme ?? null);
+  setAmbience(({ blight: "ambience_blight", desert: "ambience_sandstorm", meadow: "ambience_meadow" } as Record<string, string>)[map.theme ?? ""] ?? null);
   sun.color.set(look.sunColor); sun.intensity = look.sun;
   // warp portals (npc/re/warps): a light column on each warp cell of this map (portal.ts); a scripted door (the sealed stair) is
   // drawn by its own prop instead
@@ -205,7 +206,7 @@ function addEntity(id: string, s: any, isMonster: boolean, isMe: boolean, isPet 
   if (!isMonster || boss) { // RO shows monster names only on hover (tooltip); a boss / MVP keeps a coloured tag
     label = document.createElement("div");
     label.className = isPet ? (def && isLegendaryPet(def.id) ? "label pet legendary" : "label pet") : isMe ? "label me" : boss ? `label ${boss === 2 ? "mvp" : "boss"}` : "label";
-    label.textContent = isPet ? s.name : def ? def.name : s.name;
+    label.textContent = isPet ? s.name : def ? (boss ? bossTag(def.id, def.name, def.level) : def.name) : s.name; // a mini-boss's tag: floor, level, phase
     labels.append(label);
   }
   const bar = document.createElement("div");
@@ -374,7 +375,11 @@ function enterWorld(r: Room) {
   r.onMessage(Msg.hotkeys, (m: HotkeysEvent) => setHotkeys(m.keys, m.rowShift));
   r.onMessage(Msg.shop, (m: ShopEvent) => openShop(m));
   r.onMessage(Msg.shopClose, () => closeShop());
-  r.onMessage(Msg.notice, (m: NoticeEvent) => { log("system", m.text); play("sfx", "error", 0.5); });
+  // 2.9.0 the dev shortcuts' replies ("[dev] ...", debug data) never reach the player chat; ?devlog=1 shows them while testing
+  r.onMessage(Msg.notice, (m: NoticeEvent) => {
+    if (m.text.startsWith("[dev]") && !location.search.includes("devlog=1")) { console.debug(m.text); return; }
+    log("system", m.text); play("sfx", "error", 0.5);
+  });
   r.onMessage(Msg.itemGet, (m: ItemGetEvent) => {
     const it = ITEMS.get(m.itemId);
     log("exp", tr("game.obtained", { name: it?.name ?? tr("game.item"), n: m.amount > 1 ? ` ×${m.amount}` : "" })); // the pickup motion is Msg.takeItem
@@ -403,7 +408,9 @@ function enterWorld(r: Room) {
   setPartyMap(mapName);
   bindEmotions(r); // NPC scripts in the world: emotion bubbles and npctalk lines (ui/emotion.ts)
   bindTower(r); // 2.7.0 floor guardian hint panel (ui/tower.ts)
-  bindBoss(r, { entity: (id) => { const e = entities.get(id); return e && { pos: e.pos, name: e.name, top: e.view.standTop(), dead: e.dead }; }, me: () => r.sessionId, fx }); // MVP effect, rewards, announcements, boss move FX (ui/boss.ts)
+  bindBoss(r, { entity: (id) => { const e = entities.get(id); return e && { pos: e.pos, name: e.name, top: e.view.standTop(), dead: e.dead,
+    spotlight: (sec: number) => (e.view as { spotlight?: (s: number) => void }).spotlight?.(sec) }; },
+    screen: (p) => { const q = p.clone().project(camera); return { x: (q.x + 1) / 2 * innerWidth, y: (1 - q.y) / 2 * innerHeight }; }, me: () => r.sessionId, fx }); // MVP effect, rewards, announcements, boss move FX (ui/boss.ts)
   r.onLeave((code: number) => {
     if (leaving) return;
     leaveWorld();
@@ -934,6 +941,13 @@ renderer.setAnimationLoop(() => {
     e.shadow.scale.setScalar(THREE.MathUtils.clamp(e.view.height / 1.5, 0.6, 2)).multiply(SHADOW_SQUASH);
     if (e.moving) e.view.faceDir(e.dir);
     e.view.update(held ? 0 : dt, cam.yaw, { moving: e.moving && e.speed > 0.3, dead: e.dead, sitting: e.sitting, speed: e.speed });
+    const bl = bossLook(id, now); // a boss changing form: squash / fade / rise (ui/boss.ts)
+    if (bl) {
+      const sp = e.obj as THREE.Sprite, mt = sp.material as THREE.SpriteMaterial;
+      sp.scale.x *= bl.sx; sp.scale.y *= bl.sy;
+      mt.opacity *= bl.a; mt.alphaTest = Math.max(0.01, 0.3 * mt.opacity);
+      sp.visible = mt.opacity > 0.01;
+    }
     e.shadow.visible = e.obj.visible && !(e.dead && e.isMonster);
     const isMe = id === room?.sessionId;
     if (isMe) cam.target.lerp(tmp.set(e.pos.x, e.pos.y + 0.6, e.pos.z), 1 - Math.exp(-dt * 8));

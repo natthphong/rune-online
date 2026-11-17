@@ -1,3 +1,4 @@
+import { TOWER_BY_GUARDIAN } from "../tower.ts";
 // Content checks (shared/content): quest rows parse without the warnings rAthena would print, every name / NPC / cell / cutin
 // they point at exists, NPCs stand on walkable cells with a sprite, and the whole of Chapter 1 plays through the real NPC
 // scripts (a Script double over an in-memory character) with the "!" / "?" marks pointing at the next NPC at every step.
@@ -66,7 +67,8 @@ test("Chapter 1 is one Main chain 1001-1014 whose kill / drop targets exist on t
       const mobs = o.mobId ? [o.mobId] : MOBS.filter((m) => (o.element === "All" || m.element === o.element) && (o.race === "All" || m.race === o.race)).map((m) => m.id);
       // a named target must spawn; a filter target (any Fire monster...) needs at least one spawning species (new species may
       // match the filter before the world builder places them)
-      const spawning = (id: number) => spawns.includes(`\t${id},`) || spawns.includes(`${mobNamed(id)!.name}\t${id},`);
+      // 2.9.0: a floor guardian has no line, it rises at a random spot of its floor's map (shared/tower.ts)
+      const spawning = (id: number) => spawns.includes(`\t${id},`) || spawns.includes(`${mobNamed(id)!.name}\t${id},`) || TOWER_BY_GUARDIAN.has(id);
       assert.ok(mobs.length && (o.mobId ? mobs.every(spawning) : mobs.filter(spawning).length >= 2), `${q.id}: targets spawn on a field`);
     }
     for (const d of q.drops) assert.ok(d.mobId === 0 || spawns.includes(`${mobNamed(d.mobId)!.name}\t`), `${q.id}: drop monster spawns`);
@@ -505,7 +507,7 @@ test("C11 roster: every species has sprite sheets, a spawn line on walkable cell
   const petOnly = (m: object) => (m as { petOnly?: boolean }).petOnly === true;
   const hasArt = (id: number) => anim.includes(`mob_${id}_move`) && anim.includes(`mob_${id}_act`);
   for (const m of MOBS) {
-    const placed = spawns.includes(`${m.name}\t${m.id},`);
+    const placed = spawns.includes(`${m.name}\t${m.id},`) || TOWER_BY_GUARDIAN.has(m.id); // 2.9.0 guardians roam (shared/tower.ts)
     assert.ok(unplaced.has(m.id) || placed || petOnly(m), `${m.name} has a spawn line`); // 2.4.0: a legendary pet's species never spawns
     assert.ok(C14_ART_PENDING.has(m.id) || hasArt(m.id), `${m.name} has move + act sheets`);
     // W03: a placed species whose art is still pending is drawn with a look-alike's sheets (shared/mobart.ts), never invisible
@@ -583,6 +585,9 @@ test("2.5.0 Ascent Stair: sealed without f1_seal, short of Base Lv 25 it says so
   log = await talk(w, NPC2.ascent, [], true);
   assert.ok(log.some((l) => l.includes(`Base Lv ${F2_GATE_LEVEL}`)) && !log.some((l) => l.startsWith("warp") || l.startsWith("setquest")), "seal but too low");
   w.params.BaseLevel = F2_GATE_LEVEL;
+  log = await talk(w, NPC2.ascent, [], true); // 2.9.0 the Tower rule: floor 1's guardian still stands
+  assert.ok(log.some((l) => l.includes("guardian still stands")) && !log.some((l) => l.startsWith("warp")), "guardian alive: sealed");
+  w.vars.tower_f1 = 1;
   log = await talk(w, NPC2.ascent, [], true);
   assert.deepEqual(log, [`set f2_visit 1`, `setquest ${Q2.ARRIVE}`, `warp ${F2_ARRIVAL.map} ${F2_ARRIVAL.x} ${F2_ARRIVAL.y}`]);
   assert.equal(w.vars[F2_VAR], 1);

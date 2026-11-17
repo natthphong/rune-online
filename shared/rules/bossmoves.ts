@@ -1,3 +1,4 @@
+import { MINIS, TRANSFORM_BELOW } from "../minibosses.ts";
 // Our own floor-boss moves (not an rAthena port; kept data-driven, keyed by mob id, for future floor bosses):
 //   spit   a ranged glob at the boss's target when it stands beyond melee reach but within sight: the boss's normal attack
 //          damage (battle rules' mobAttack) after the glob's flight, plus an optional short Decrease AGI (the slow);
@@ -60,6 +61,10 @@ export type BossArea = {
   length?: number;
   /** sweep: how many safe circles and their radius */
   safe?: number; safeR?: number;
+  /** 2.9.0 sweep: one safe circle about this many cells from every player under it (a run of ~1-2 s), then random ones up to `safe` */
+  safeNear?: number;
+  /** 2.9.0 circles in a RING around the boss: `count` circles evenly on a circle of this radius (the slime-rain ring) */
+  ring?: number;
   /** a chat line when it starts (the ultimate's warning) */
   text?: string;
 };
@@ -72,7 +77,11 @@ export type BossFeel = { sight: number; runPct: number; opener?: string; gcdMs: 
 export type BossRage = { below: number; cdPct: number; aspdPct: number; walkPct: number };
 /** A boss with a target never stands idle longer than this (ms): the AI hops instead. */
 export const IDLE_MAX_MS = 550;
+/** 2.9.0 a phase change (Ceruleen): under `hpBelow` % of max HP the boss stops for `ms` (the client's transform: it collapses, swirls,
+ *  rises) and comes back as mob `to`, keeping its HP, its target and its damage log. */
+export type BossTransform = { hpBelow: number; to: number; ms: number; text: string; key?: string };
 export type BossMoves = {
+  transform?: BossTransform;
   spit?: BossSpit; split?: readonly BossSplit[];
   charge?: BossCharge; headbutt?: BossHeadbutt; shouts?: readonly BossShout[];
   /** under this % of max HP the charge cooldown shrinks to ratePct */
@@ -87,6 +96,50 @@ const KID = 1107;
 /** Devo's mob id (tools/rathena/import.ts DEVO_ID), floor 2's dungeon MVP. */
 export const DEVO = 3999;
 
+/** Ashgrim, the four-legged goat-demon: rams, scythe cleaves, a hoof quake, and its ultimate the Long Harvest. */
+export const ASHGRIM_MOVES: BossMoves = {
+  charge: { minRange: 4, maxRange: 10, cooldownMs: 8000, jitterMs: 2500, ratePct: 60, windMs: 700, dashMsPerCell: 50, dmgRate: 170, knockback: 3, stunMs: 1000 },
+  feel: { sight: 13, runPct: 72, opener: "cleave", gcdMs: 1000, hopMs: 3000 },
+  rage: { below: 30, cdPct: 60, aspdPct: 75, walkPct: 85 },
+  areas: [
+    // The Long Harvest (under 80 %): the scythe sweeps a disc 50 cells around it, almost the whole map; only the five pale circles are
+    // safe, one ~8 cells from everyone under it (a 1-2 s run) and the rest scattered. 5.5 s of warning, and it must not be stood in.
+    { name: "reap", shape: "sweep", at: "self", r: 50, minRange: 0, maxRange: 14, windMs: 5500, cooldownMs: 32000, jitterMs: 6000, dmgRate: 600, hpBelow: 80,
+      safe: 5, safeR: 2.5, safeNear: 8, text: "Ashgrim raises its scythe to the sky. RUN to a pale circle!" },
+    // Scythe Cleave: a line through the target
+    { name: "cleave", shape: "line", at: "self", r: 1, minRange: 0, maxRange: 4, windMs: 750, cooldownMs: 5500, jitterMs: 1500, dmgRate: 200, length: 7 },
+    // Hellhoof: it rears and slams its burning hooves down, a shockwave around itself
+    { name: "stomp", shape: "circle", at: "self", r: 3, minRange: 0, maxRange: 2, windMs: 900, cooldownMs: 9000, jitterMs: 2000, dmgRate: 210, knockback: 3, stunMs: 800 },
+  ],
+};
+/** Ceruleen phase 1, the huge blue jelly: leaps onto its target, bursts, splits off jellies; at half HP it turns (`to` set per floor). */
+const CERULEEN_JELLY: BossMoves = {
+  feel: { sight: 12, runPct: 70, opener: "splash", gcdMs: 1200, hopMs: 2800 },
+  areas: [
+    { name: "splash", shape: "circle", at: "target", r: 2, minRange: 2, maxRange: 10, windMs: 1000, cooldownMs: 7000, jitterMs: 2000, dmgRate: 220, knockback: 2, leap: true },
+    { name: "burst", shape: "circle", at: "self", r: 3, minRange: 0, maxRange: 2, windMs: 850, cooldownMs: 7000, jitterMs: 2000, dmgRate: 180, knockback: 3 },
+  ],
+  split: [{ hpBelow: 80, ids: [PUDDLEBLOOM], amount: 4, text: "Ceruleen wobbles and splashes out little jellies!" }],
+};
+/** Ceruleen phase 2, the slime-folk swordsman of water: fast dashes, water-blade lines, a ring of slime rain around itself. */
+export const CERULEEN_FORM: BossMoves = {
+  charge: { minRange: 3, maxRange: 9, cooldownMs: 4500, jitterMs: 1500, ratePct: 70, windMs: 450, dashMsPerCell: 32, dmgRate: 165, knockback: 2, stunMs: 0 },
+  feel: { sight: 14, runPct: 60, opener: "charge", gcdMs: 800, hopMs: 2200 },
+  rage: { below: 25, cdPct: 55, aspdPct: 70, walkPct: 80 },
+  areas: [
+    // Water Blade: a long slash through the target
+    { name: "blade", shape: "line", at: "self", r: 1, minRange: 0, maxRange: 8, windMs: 650, cooldownMs: 4000, jitterMs: 1200, dmgRate: 210, length: 9 },
+    // Slime Rain: ten globs fall in a ring around it, one after another; the middle is the dodge
+    { name: "rainring", shape: "circle", at: "self", r: 2, minRange: 0, maxRange: 10, windMs: 1100, castMs: 500, cooldownMs: 11000, jitterMs: 2500, dmgRate: 180,
+      slowLv: 3, slowMs: 3000, count: 10, ring: 5, stepMs: 120, text: "Ceruleen lifts its jelly hand. Slime rain rings the ground!" },
+  ],
+  shouts: [{ hpBelow: 25, text: "Ceruleen's water turns ice-cold!", kind: "roar" }],
+};
+const MINI_MOVES: [number, BossMoves][] = MINIS.flatMap((mini) => ([1, 2, 3] as const).flatMap((f): [number, BossMoves][] =>
+  mini.key === "ashgrim" ? [[mini.ids[f], ASHGRIM_MOVES]] : [
+    [mini.ids[f], { ...CERULEEN_JELLY, transform: { hpBelow: TRANSFORM_BELOW, to: mini.phase2![f], ms: 2600, text: "Ceruleen collapses into a swirling pool... and something rises from it!" } }],
+    [mini.phase2![f], CERULEEN_FORM],
+  ]));
 export const BOSS_MOVES: ReadonlyMap<number, BossMoves> = new Map<number, BossMoves>([
   [3810, { // Gloopking, floor 1 MVP (catacombs B3)
     spit: { minRange: 3, maxRange: 10, cooldownMs: 3000, jitterMs: 1500, flightMsPerCell: 90, dmgRate: 100, slowLv: 3, slowMs: 4000 },
@@ -140,18 +193,8 @@ export const BOSS_MOVES: ReadonlyMap<number, BossMoves> = new Map<number, BossMo
       { hpBelow: 25, ids: [4301, 4305], amount: 5, text: "Morrowgast tears the graves open!", kind: "roar" },
     ],
   }],
-  [4311, { // Ashgrim, floor 3's mini-boss: a horned goat-demon with a scythe. Its ultimate reaps almost the whole field.
-    charge: { minRange: 4, maxRange: 10, cooldownMs: 9000, jitterMs: 2500, ratePct: 60, windMs: 700, dashMsPerCell: 50, dmgRate: 170, knockback: 3, stunMs: 1000 },
-    feel: { sight: 12, runPct: 75, opener: "cleave", gcdMs: 1100, hopMs: 3200 },
-    rage: { below: 30, cdPct: 60, aspdPct: 75, walkPct: 85 },
-    areas: [
-      // The Long Harvest (under 75 %): the scythe sweeps a disc 16 cells wide; only the three pale circles are safe. 4.5 s to reach one.
-      { name: "reap", shape: "sweep", at: "self", r: 16, minRange: 0, maxRange: 12, windMs: 4500, cooldownMs: 38000, jitterMs: 6000, dmgRate: 600, hpBelow: 75, safe: 3, safeR: 2,
-        text: "Ashgrim raises its scythe to the sky. RUN to a pale circle!" },
-      // Scythe Cleave: a line through the target
-      { name: "cleave", shape: "line", at: "self", r: 1, minRange: 0, maxRange: 4, windMs: 750, cooldownMs: 5500, jitterMs: 1500, dmgRate: 200, length: 6 },
-    ],
-  }],
+  // 2.9.0 the roaming mini-bosses (shared/minibosses.ts): one row per floor id, built below
+  ...MINI_MOVES,
 ]);
 
 /** Whether a boss spits now: its cooldown is over, it has a target in [minRange, maxRange] and the straight line to it is clear. */
@@ -279,3 +322,24 @@ export function safeSpots(walkable: (x: number, y: number) => boolean, c: Cell, 
   }
   return out;
 }
+
+/** 2.9.0 the giant sweep's safe circles: one about `near` cells from each player under it (on a walkable cell, outside the boss's own
+ *  3 cells, not overlapping another), then random ones (safeSpots) up to `count`. Everyone has a circle a short run away. */
+export function safeNearPlayers(walkable: (x: number, y: number) => boolean, c: Cell, r: number, players: readonly Cell[], near: number, count: number,
+  safeR: number, roll: (n: number) => number): { x: number; y: number; r: number }[] {
+  const out: { x: number; y: number; r: number }[] = [];
+  const free = (x: number, y: number) => walkable(x, y) && Math.hypot(x - c.x, y - c.y) >= 4 && Math.hypot(x - c.x, y - c.y) <= r - 2
+    && !out.some((z) => Math.hypot(z.x - x, z.y - y) < 2 * safeR + 2);
+  for (const p of players) {
+    if (out.some((z) => Math.hypot(z.x - p.x, z.y - p.y) <= near + 2)) continue; // a circle already close enough
+    for (let tries = 0; tries < 60; tries++) {
+      const a = (roll(360) * Math.PI) / 180, d = near - 2 + roll(5), x = Math.round(p.x + Math.cos(a) * d), y = Math.round(p.y + Math.sin(a) * d);
+      if (free(x, y)) { out.push({ x, y, r: safeR }); break; }
+    }
+  }
+  for (const z of safeSpots(walkable, c, Math.min(r, 20), count, safeR, roll)) if (out.length < count && free(z.x, z.y)) out.push(z);
+  return out;
+}
+/** 2.9.0 `count` cells evenly on a circle of radius `ring` around c (the slime-rain ring). */
+export const ringCells = (c: Cell, ring: number, count: number): Cell[] =>
+  Array.from({ length: count }, (_, i) => ({ x: Math.round(c.x + Math.cos((i / count) * Math.PI * 2) * ring), y: Math.round(c.y + Math.sin((i / count) * Math.PI * 2) * ring) }));

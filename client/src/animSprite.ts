@@ -266,6 +266,11 @@ export class AnimSprite {
     else this.act = { kind, want: k.idle, t: 0, dur: 0.7 };
   }
 
+  /** 2.9.0 a boss's big wind-up for the camera (the Long Harvest): for `sec` it holds its wind-up / cast frame, stands 15 % taller,
+   *  never fades and is drawn over every ground decal and light pillar, so it cannot be missed or washed out. */
+  spotlight(sec: number) { this.spot = sec; }
+  private spot = 0;
+
   /** Fade this actor (and stop it hiding things in the depth buffer) while it stands in front of a unit you fight. */
   setSeeThrough(on: boolean) { this.fadeTo = on ? SEE_THROUGH_ALPHA : 1; }
   get seeThrough() { return this.fadeTo < 1; }
@@ -336,7 +341,9 @@ export class AnimSprite {
     if (this.act) { this.act.t += dt; if (this.act.t >= this.act.dur || s.dead) this.act = undefined; }
     if (this.flinch) { this.flinch.t += dt; if (this.flinch.t >= this.flinch.dur || s.dead) this.flinch = undefined; }
     let want: Frames, t = 0;
+    if (this.spot > 0) this.spot = s.dead ? 0 : Math.max(0, this.spot - dt);
     if (s.dead) want = k.dead;
+    else if (this.spot > 0) { const a = k.attack(this.look?.weapon ?? "fist"); want = [a[0], [a[1][0]]]; }
     else if (this.flinch) want = k.hurt;
     else if (this.act) {
       const a = this.act, n = a.want[1].length;
@@ -360,7 +367,9 @@ export class AnimSprite {
     }
     // procedural touches: breathing while idle, a hop for level-up, monsters fade out after the death pose
     const mat = this.object.material as THREE.SpriteMaterial;
-    this.fade += (this.fadeTo - this.fade) * Math.min(1, dt * 12);
+    this.fade += ((this.spot > 0 ? 1 : this.fadeTo) - this.fade) * Math.min(1, dt * 12);
+    const spot = this.spot > 0;
+    if (mat.depthTest === spot) { mat.depthTest = !spot; this.object.renderOrder = spot ? 60 : 0; mat.needsUpdate = true; }
     mat.opacity = (k === MOB && s.dead ? THREE.MathUtils.clamp(1 - (this.deadFor - 0.8) / 0.7, 0, 1) : 1) * this.fade;
     // keep the cut-out edge where it is while fading (alpha test runs on texel alpha x opacity)
     mat.alphaTest = Math.max(0.01, 0.3 * mat.opacity);
@@ -370,7 +379,8 @@ export class AnimSprite {
     const breathe = !s.moving && !s.dead && !this.act ? 1 + Math.sin(performance.now() / 600) * 0.012 : 1;
     // flinch jolt: out in 50 ms, eased back over the rest of the hurt frame, with a slight squash
     const fl = this.flinch, jolt = fl ? (fl.t < 0.05 ? fl.t / 0.05 : Math.max(0, 1 - (fl.t - 0.05) / (fl.dur - 0.05))) : 0;
-    this.object.scale.set(CW * this.worldPerPx / breathe * (1 + 0.06 * jolt), CH * this.worldPerPx * breathe * (1 - 0.05 * jolt), 1);
+    const big = spot ? 1.15 : 1;
+    this.object.scale.set(CW * this.worldPerPx / breathe * (1 + 0.06 * jolt) * big, CH * this.worldPerPx * breathe * (1 - 0.05 * jolt) * big, 1);
     const hop = this.act?.kind === "cheer" ? Math.sin(Math.PI * Math.min(1, this.act.t / this.act.dur * 2)) * 0.35 : 0;
     this.object.center.x = 0.5 - (jolt * FLINCH_PUSH * (fl?.away?.x ?? 0)) / (CW * this.worldPerPx);
     this.object.center.y = FEET / CH - (hop + jolt * FLINCH_PUSH * (fl?.away?.y ?? 0)) / (CH * this.worldPerPx);

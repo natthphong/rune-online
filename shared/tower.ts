@@ -29,10 +29,10 @@ export type TowerFloor = {
 };
 
 export const TOWER: readonly TowerFloor[] = [
-  { floor: 1, title: "The Verdant Floor", map: "f1_dun03", guardian: 3810, random: false, clearVar: "tower_f1", level: 30,
-    hp: 72000, atk: 105, attackDelay: 1150, attackMotion: 650, walkSpeed: 170, was: { hp: 50000, atk: 90, attackDelay: 1632 }, respawnMs: 3600000, respawnVar: 3600000 },
-  { floor: 2, title: "The Ember Floor", map: "f2_dun01", guardian: 3999, random: false, clearVar: "tower_f2", level: 46,
-    hp: 135000, atk: 130, attackDelay: 1000, attackMotion: 520, walkSpeed: 150, was: { hp: 90000, atk: 100, attackDelay: 1400 }, respawnMs: 3600000, respawnVar: 3600000 },
+  { floor: 1, title: "The Verdant Floor", map: "f1_field05", guardian: 3810, random: true, clearVar: "tower_f1", level: 30,
+    hp: 72000, atk: 105, attackDelay: 1150, attackMotion: 650, walkSpeed: 170, was: { hp: 50000, atk: 90, attackDelay: 1632 }, respawnMs: 1200000, respawnVar: 600000 },
+  { floor: 2, title: "The Ember Floor", map: "f2_field03", guardian: 3999, random: true, clearVar: "tower_f2", level: 46,
+    hp: 135000, atk: 130, attackDelay: 1000, attackMotion: 520, walkSpeed: 150, was: { hp: 90000, atk: 100, attackDelay: 1400 }, respawnMs: 1500000, respawnVar: 600000 },
   // floor 3 (shared/floor3.ts): the first floor built for the rule. Morrowgast roams: a random spot of Witherwick each time it rises.
   { floor: 3, title: "The Blighted Shire", map: "f3_field01", guardian: 4310, random: true, clearVar: "tower_f3", level: 58,
     hp: 230000, atk: 175, attackDelay: 900, attackMotion: 450, walkSpeed: 140, respawnMs: 1800000, respawnVar: 900000 },

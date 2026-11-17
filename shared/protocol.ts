@@ -87,6 +87,9 @@ export type BossShape = "circle" | "line" | "sweep";
 export type BossTeleEvent = { id: string; move: string; shape: BossShape; x: number; y: number; r: number; ex?: number; ey?: number; ms: number; safe?: { x: number; y: number; r: number }[]; leap?: boolean };
 /** The impact of a telegraphed move (same geometry as its BossTeleEvent): the client's burst, screen shake and hit-stop. */
 export type BossImpactEvent = { id: string; move: string; shape: BossShape; x: number; y: number; r: number; ex?: number; ey?: number; safe?: { x: number; y: number; r: number }[] };
+/** 2.9.0 a boss's phase change (Ceruleen, shared/rules/bossmoves.ts `transform`): `ms` > 0 = it starts (the client plays the collapse /
+ *  swirl / rise for ms); ms = 0 = done: monster `id` (the new form, mob `to`) replaced monster `from` on its cell. */
+export type BossFormEvent = { id: string; to: number; ms: number; from?: string; text?: string };
 /** A boss noticed a player (aggro on sight): it turns on `to` and runs in. `enrage` = the same cue when it enrages. */
 export type BossAggroEvent = { id: string; to: string; enrage?: boolean };
 /** A boss repositions: a quick hop / sidestep from its cell to (x, y) in `ms` (the state patch moves it; this is the dust + arc). */
@@ -106,7 +109,7 @@ export type AnnounceEvent = { text: string };
 // DEV ONLY: "hurt" = the sender deals `dmg` (default: all HP but 1) to monster `id`; "kill" = a killing blow from the sender;
 // "spawn" = a boss_monster line of `mobId` at (x, y) (respawn 15-20 s, id is ignored); "remove" = that test line and its slaves / tomb.
 // 2.7.0: "stat" = a notice with the boss's fight numbers (longest idle gap, moves used); "move" = force the move named `move` now.
-export type DevBossMsg = { op: "hurt" | "kill" | "spawn" | "remove" | "stat" | "move" | "tower" | "var"; move?: string; id: string; dmg?: number; mobId?: number; x?: number; y?: number };
+export type DevBossMsg = { op: "hurt" | "kill" | "spawn" | "remove" | "stat" | "move" | "tower" | "var" | "mini"; move?: string; id: string; dmg?: number; mobId?: number; x?: number; y?: number };
 // ZC_ITEMCOMPOSITION_LIST (clif_use_card): the inventory uids the card `card` can be compounded into (only sent when there is one).
 export type CardListEvent = { card: number; targets: number[] };
 // ZC_ACK_ITEMCOMPOSITION (clif_insert_card): the result of a compound (result 0 = success, 1 = failure); the inv snapshot follows on success.
@@ -292,6 +295,7 @@ export const Msg = {
   bossSplit: "bossSplit", // server -> area: BossSplitEvent (a boss splits into slaves at an HP threshold)
   bossCharge: "bossCharge", // server -> area: BossChargeEvent (Devo's charge telegraph / headbutt wind-up)
   bossSlam: "bossSlam", // server -> area: BossSlamEvent (the impact of a charge / headbutt on a player)
+  bossForm: "bossForm", // server -> map: BossFormEvent (2.9.0 a boss turns into its next form)
   bossTele: "bossTele", // server -> area: BossTeleEvent (a telegraphed area move's ground warning)
   bossImpact: "bossImpact", // server -> area: BossImpactEvent (its impact)
   bossAggro: "bossAggro", // server -> area: BossAggroEvent (noticed a player / enraged)

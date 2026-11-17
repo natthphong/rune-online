@@ -581,6 +581,117 @@ export class Fx {
     });
   }
 
+  /** Our own water-swirl picture (four spiral arms of droplets round a soft core), drawn once: the transform's vortex. */
+  private swirlTex?: THREE.CanvasTexture;
+  private swirl() {
+    if (this.swirlTex) return this.swirlTex;
+    const S = 256, c = S / 2, cv = document.createElement("canvas");
+    cv.width = cv.height = S;
+    const g = cv.getContext("2d")!;
+    const core = g.createRadialGradient(c, c, 0, c, c, c * 0.35);
+    core.addColorStop(0, "rgba(220,250,255,0.9)"); core.addColorStop(1, "rgba(80,190,255,0)");
+    g.fillStyle = core; g.fillRect(0, 0, S, S);
+    for (let arm = 0; arm < 4; arm++) for (let i = 0; i < 70; i++) {
+      const u = i / 70, r = (0.08 + 0.88 * u) * c, a = (arm * Math.PI) / 2 + u * 4.4;
+      g.fillStyle = `rgba(${130 + Math.round(110 * (1 - u))},${225},255,${0.2 + 0.8 * (1 - u * 0.7)})`;
+      g.beginPath(); g.arc(c + Math.cos(a) * r, c + Math.sin(a) * r, 2 + 9 * (1 - u * 0.5), 0, Math.PI * 2); g.fill();
+    }
+    const t = new THREE.CanvasTexture(cv);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return (this.swirlTex = t);
+  }
+  private waterColumnTex?: THREE.CanvasTexture;
+
+  /** A boss turning into its next form (Msg.bossForm, ms > 0): a water vortex turns on the ground under it (two counter-turning
+   *  swirls and a pulsing ring), droplets are flung up and fall back, then a column of light and water rises (the last third) and
+   *  holds until the form is done. `size` ~ the boss's width in cells. Plays for `ms` + 0.7 s. */
+  vortex(anchor: THREE.Vector3, ms: number, size: number) {
+    const T = ms / 1000, group = new THREE.Group();
+    const flatMesh = (tex: THREE.Texture) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), additive(tex)); m.position.y = 0.07; return m; };
+    const a = flatMesh(this.swirl()), b = flatMesh(this.swirl()), ring = flatMesh(ringTexture("rgba(150,235,255,0.95)"));
+    this.waterColumnTex ??= gradientTexture([[0, "rgba(130,225,255,0.85)"], [0.5, "rgba(190,240,255,0.35)"], [1, "rgba(255,255,255,0)"]]);
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.8 * size, 1.1 * size, 10, 28, 1, true), additive(this.waterColumnTex));
+    const core = new THREE.Mesh(new THREE.CylinderGeometry(0.3 * size, 0.45 * size, 10, 16, 1, true), additive(this.waterColumnTex));
+    const n = 56, pos = new Float32Array(n * 3), seeds = Array.from({ length: n }, () => [Math.random() * Math.PI * 2, Math.random(), 0.6 + Math.random() * 0.8]);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    const drops = new THREE.Points(geo, new THREE.PointsMaterial({ color: "#a6ecff", size: 0.26, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    group.add(a, b, ring, col, core, drops);
+    this.scene.add(group);
+    const base = anchor.clone();
+    this.bursts.push({
+      group, t0: performance.now(), anchor: base, life: T + 0.7,
+      update: (t) => {
+        const k = Math.min(1, t / T), out = t > T ? Math.max(0, 1 - (t - T) / 0.6) : 1, inn = Math.min(1, t * 3);
+        const ease = 1 - (1 - Math.min(1, t / 0.6)) ** 3;
+        a.scale.setScalar(size * (1.3 + 3.4 * ease) * (1 + 0.04 * Math.sin(t * 9))); a.rotation.y = -t * (4 + 9 * k);
+        b.scale.setScalar(size * (0.9 + 2.2 * ease)); b.rotation.y = t * (6 + 10 * k);
+        (a.material as THREE.MeshBasicMaterial).opacity = inn * out * 0.95;
+        (b.material as THREE.MeshBasicMaterial).opacity = inn * out * 0.8;
+        const pulse = (t * 1.6) % 1;
+        ring.scale.setScalar(size * (4.2 - 3.2 * pulse)); (ring.material as THREE.MeshBasicMaterial).opacity = inn * out * Math.sin(pulse * Math.PI);
+        seeds.forEach(([ang, off, hh], i) => {
+          const ph = (t * 1.15 + off) % 1, r = size * (0.5 + ph * 2.4);
+          pos[i * 3] = Math.cos(ang + t * (3 + 4 * k)) * r; pos[i * 3 + 1] = 4 * ph * (1 - ph) * 3.4 * size * hh * (0.4 + k); pos[i * 3 + 2] = Math.sin(ang + t * (3 + 4 * k)) * r;
+        });
+        geo.attributes.position.needsUpdate = true;
+        (drops.material as THREE.PointsMaterial).opacity = inn * out;
+        const rise = Math.max(0, (k - 0.55) / 0.45), up = 1 - (1 - rise) ** 2;
+        col.scale.set(1, Math.max(0.01, up), 1); col.position.y = 5 * up; col.rotation.y = t * 3;
+        core.scale.set(1, Math.max(0.01, up), 1); core.position.y = 5 * up; core.rotation.y = -t * 5;
+        (col.material as THREE.MeshBasicMaterial).opacity = up * out; (core.material as THREE.MeshBasicMaterial).opacity = up * out * 0.9;
+      },
+    });
+  }
+
+  /** The new form appearing (Msg.bossForm, ms = 0): a splash ring and droplets thrown out from where it rises. */
+  splash(anchor: THREE.Vector3, size: number) {
+    pfx("poof", anchor, { size: size * 2.4, tint: "#8fdcff" });
+    pfx("landing", anchor, { size: size * 3, tint: "#bff0ff", delayMs: 40 });
+    const group = new THREE.Group();
+    const ring = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), additive(ringTexture("rgba(170,240,255,0.95)")));
+    ring.position.y = 0.07;
+    const n = 36, pos = new Float32Array(n * 3), seeds = Array.from({ length: n }, () => [Math.random() * Math.PI * 2, 1.2 + Math.random() * 2.4, 2 + Math.random() * 3]);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    const drops = new THREE.Points(geo, new THREE.PointsMaterial({ color: "#c4f2ff", size: 0.22, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    group.add(ring, drops);
+    this.scene.add(group);
+    this.bursts.push({
+      group, t0: performance.now(), anchor: anchor.clone(), life: 1.1,
+      update: (t) => {
+        ring.scale.setScalar(size * (1 + t * 7)); (ring.material as THREE.MeshBasicMaterial).opacity = Math.max(0, 1 - t / 0.7);
+        seeds.forEach(([ang, v, vy], i) => { pos[i * 3] = Math.cos(ang) * v * t * size * 0.6; pos[i * 3 + 1] = Math.max(0, vy * t - 6 * t * t) * size * 0.5; pos[i * 3 + 2] = Math.sin(ang) * v * t * size * 0.6; });
+        geo.attributes.position.needsUpdate = true;
+        (drops.material as THREE.PointsMaterial).opacity = Math.max(0, 1 - t / 1.0);
+      },
+    });
+  }
+
+  /** A tall pale pillar of light with a pulsing ground ring (The Long Harvest's safe circles: readable from across the screen). Lives `ms`. */
+  safePillar(at: THREE.Vector3, r: number, ms: number) {
+    const group = new THREE.Group();
+    const tex = gradientTexture([[0, "rgba(90,255,140,0.9)"], [0.6, "rgba(120,255,160,0.3)"], [1, "rgba(120,255,160,0)"]]);
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.7, r * 0.9, 18, 24, 1, true), additive(tex));
+    col.position.y = 9;
+    const core = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.25, r * 0.35, 18, 12, 1, true), additive(tex));
+    core.position.y = 9;
+    const ring = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), additive(ringTexture("rgba(170,255,190,0.95)")));
+    ring.position.y = 0.09;
+    group.add(col, core, ring);
+    this.scene.add(group);
+    this.bursts.push({
+      group, t0: performance.now(), anchor: at.clone(), life: ms / 1000,
+      update: (t) => {
+        const inn = Math.min(1, t * 4), out = Math.min(1, (ms / 1000 - t) / 0.3), p = 0.5 + 0.5 * Math.sin(t * 6);
+        col.rotation.y = t * 1.5; core.rotation.y = -t * 2.5;
+        (col.material as THREE.MeshBasicMaterial).opacity = inn * out * (0.3 + 0.18 * p);
+        (core.material as THREE.MeshBasicMaterial).opacity = inn * out * 0.45;
+        ring.scale.setScalar(r * (2.5 + 0.2 * p)); (ring.material as THREE.MeshBasicMaterial).opacity = inn * out * (0.6 + 0.4 * p);
+      },
+    });
+  }
+
   markClick(at: THREE.Vector3) {
     this.click.position.copy(at).setY(at.y + 0.04);
     this.click.visible = true;

@@ -110,7 +110,6 @@ f1_dun03,13,52,4,4	monster	Rattlebones	1076,3,5000
 f1_dun03,59,52,4,4	monster	Rattlebones	1076,3,5000
 f1_dun03,58,28,4,4	monster	Rattlebones	1076,3,5000
 f1_dun03,14,28,4,4	monster	Gloombat	1005,4,5000
-f1_dun03,36,14	boss_monster	Gloopking	3810,1,3600000,3600000
 
 // 2.5.0 Floor 2 (shared/floor2.ts): Lanternrest has no spawn lines. The Ember Floor's own species (rAthena Renewal Lv 32-45, the ember /
 // ash / slag set; sprites in client/public/sprites/anim): the Terraces Lv 32-35, the Heights and the vault Lv 34-45.
@@ -128,7 +127,7 @@ f2_field01,12,46,5,5	monster	Ashen Sentry	1028,5,5000
 // the stair down into the Emberhollow Vault stands in the north-east ruin (66,18). Slagimps (aggressive) in the north-west and south-west,
 // Ashhounds in the middle, Cairnshells (passive) in the south-east. Mini-boss: Cinderwarden (C14), on the heights east of the middle.
 f2_field02,28,24,6,5	monster	Slagimp	1123,5,5000
-f2_field02,30,58,6,5	monster	Slagimp	1123,5,5000
+f2_field02,34,52,6,5	monster	Slagimp	1123,5,5000
 f2_field02,46,40,6,6	monster	Ashhound	1013,6,5000
 f2_field02,44,14,5,4	monster	Ashhound	1013,4,5000
 f2_field02,54,64,6,5	monster	Cairnshell	1391,5,5000
@@ -143,7 +142,6 @@ f2_dun01,51,20,4,3	monster	Ashen Sentry	1028,4,5000
 f2_dun01,31,34,5,4	monster	Ashhound	1013,4,5000
 f2_dun01,10,45,3,3	monster	Slagimp	1123,3,5000
 f2_dun01,54,45,3,3	monster	Slagimp	1123,3,5000
-f2_dun01,32,53	boss_monster	Devo	3999,1,3600000,3600000
 
 // f3_field01 Witherwick, floor 3 (2.7.0; 120x120, Lv 50-58): ONE map for the whole floor. In from floor 2 at the south road's end
 // (60,117 -> arrival 60,113), the survivors' camp just north of it, the ruined village around the green (60,60), the chapel ruin
@@ -158,4 +156,17 @@ f3_field01,96,86,7,6	monster	Blightwing	4303,7,5000
 f3_field01,98,58,6,6	monster	Blightwing	4303,6,5000
 f3_field01,34,66,6,5	monster	Hexbound Sentry	4304,7,5000
 f3_field01,24,30,7,6	monster	Witchbone	4305,7,5000
-f3_field01,84,32,3,3	boss_monster	Ashgrim	4311,1,1800000,600000
+//
+// 2.9.0 the floors' wilds (shared/wilds.ts): each floor's ONE guardian map. The guardian (Gloopking, Devo) has no line: it left its
+// dungeon hall and rises at a random spot (server/src/tower.ts). The floor's own species, one per zone.
+f1_field05,30,30,7,6	monster	Puddlebloom	1002,9,5000
+f1_field05,90,32,7,6	monster	Sootcap	1113,8,5000
+f1_field05,28,88,7,6	monster	Dartwing	1011,8,5000
+f1_field05,92,90,7,6	monster	Dappleegg	1047,8,5000
+f1_field05,60,64,6,5	monster	Mistfin	1012,7,5000
+f1_field05,60,96,7,6	monster	Chirpjack	1052,7,5000
+f2_field03,30,30,7,6	monster	Slagimp	1123,8,5000
+f2_field03,88,26,7,6	monster	Ashhound	1013,7,5000
+f2_field03,26,90,7,6	monster	Cairnshell	1391,8,5000
+f2_field03,88,94,7,6	monster	Kilnmite	1176,8,5000
+f2_field03,54,60,7,6	monster	Cinderbough	1033,7,5000

@@ -49,7 +49,7 @@ export type TownLayout = {
 export type PropType = "tree" | "rock" | "pine" | "deadtree" | "stump" | "ruin" | "stair" | "stalagmite" | "torch"
   // 2.7.0 floor 3 (shared/floor3.ts): the ruined village's pieces. A house stands on the middle of a 3x3 blocked footprint; the rest fill one cell.
   | "house" | "housebig" | "wreck" | "fence" | "well" | "crates" | "lamppost" | "gravestone" | "cauldron";
-export type ThemeKey = "grass" | "forest" | "highland" | "swamp" | "cave" | "dusk" | "ash" | "blight"; // dusk / ash: floor 2 (2.5.0)
+export type ThemeKey = "grass" | "forest" | "highland" | "swamp" | "cave" | "dusk" | "ash" | "blight" | "meadow" | "desert"; // dusk / ash: floor 2 (2.5.0); meadow / desert: the floors' wilds (2.9.0)
 
 function rng(seed: number) {
   let s = seed >>> 0 || 1;

@@ -69,4 +69,17 @@ LOOKS.blight = {
   grass: [0.3, 0.31, 0.15], dirt: [0.44, 0.4, 0.31], water: [0.18, 0.3, 0.18], leaves: [0.46, 0.5, 0.26],
   ring: ["deadtree", "deadtree", "rock"], ringCount: 260, decor: 0.35, flowers: 0, mushrooms: 3,
 };
+// 2.9.0 the floors' wilds (shared/wilds.ts). "meadow" = floor 1's Greenhollow Wilds: a bright open capital-outskirts field, warm sun,
+// lush saturated grass, far fog. "desert" = floor 2's Sunscour Ruins: pale gold sand under a hazy ochre sky, tan dust-fog close in
+// (the sandstorm, client/src/weather.ts), hot white sun
+LOOKS.meadow = {
+  sky: "#8fcbf0", fog: "#a9d6ee", fogNear: 34, fogFar: 72, hemiSky: "#ffffff", hemiGround: "#5d7a32", hemi: 1.7, sunColor: "#fff1c8", sun: 1.75,
+  grass: [1.05, 1.12, 0.86], dirt: [1.02, 0.96, 0.86], water: [0.92, 1.05, 1.1], leaves: [0.95, 1.1, 0.85],
+  ring: ["tree", "tree", "pine"], ringCount: 320, decor: 1.4, flowers: 1.8, mushrooms: 0.6,
+};
+LOOKS.desert = {
+  sky: "#d8b98a", fog: "#cfae7c", fogNear: 12, fogFar: 46, hemiSky: "#fff0d2", hemiGround: "#7a5a34", hemi: 1.45, sunColor: "#fff0cf", sun: 1.9,
+  grass: [1.45, 1.12, 0.55], dirt: [1.35, 1.08, 0.72], water: [0.7, 1.0, 0.95], leaves: [0.8, 0.72, 0.42],
+  ring: ["rock", "deadtree", "rock"], ringCount: 200, decor: 0, flowers: 0, mushrooms: 0,
+};
 export const lookOf =(theme?: ThemeKey) => LOOKS[theme ?? "town"];
